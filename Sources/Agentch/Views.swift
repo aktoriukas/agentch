@@ -632,6 +632,8 @@ struct PanelView: View {
     var state: AppState
     var topInset: CGFloat = 24
     var notchWidth: CGFloat = 190
+    /// ImageRenderer does not lay out a ScrollView, so --render asks for the rows bare.
+    var flattenList = false
     var collapse: () -> Void
     @State private var filter: Provider?
 
@@ -729,21 +731,18 @@ struct PanelView: View {
         }
     }
 
+    @ViewBuilder
     private var list: some View {
+        if flattenList {
+            rows.frame(maxHeight: .infinity, alignment: .top)
+        } else {
+            scrollingList
+        }
+    }
+
+    private var scrollingList: some View {
         ScrollView {
-            VStack(spacing: 0) {
-                if visibleSessions.isEmpty {
-                    Text("No active sessions")
-                        .font(.system(size: 10))
-                        .foregroundStyle(UI.fg3)
-                        .padding(.horizontal, 6)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .frame(height: NotchViewModel.panelRowHeight)
-                }
-                ForEach(visibleSessions) { session in
-                    SessionRow(session: session, parity: state.parity, appearance: state.appearance)
-                }
-            }
+            rows
         }
         .scrollIndicators(.never)
         // Fade into the footer rather than stopping at a rule.
@@ -754,6 +753,22 @@ struct PanelView: View {
                     .frame(height: 12)
             }
         )
+    }
+
+    private var rows: some View {
+        VStack(spacing: 0) {
+                if visibleSessions.isEmpty {
+                    Text("No active sessions")
+                        .font(.system(size: 10))
+                        .foregroundStyle(UI.fg3)
+                        .padding(.horizontal, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: NotchViewModel.panelRowHeight)
+                }
+            ForEach(visibleSessions) { session in
+                SessionRow(session: session, parity: state.parity, appearance: state.appearance)
+            }
+        }
     }
 
     private var footer: some View {

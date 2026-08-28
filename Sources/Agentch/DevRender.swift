@@ -25,8 +25,8 @@ enum DevRender {
                        notchWidth: notch.closedSize.width, expand: {}),
               size: notch.peekSize(sessionCount: count), name: "peek-notch")
         write(PanelView(state: state, topInset: notch.closedSize.height,
-                        notchWidth: notch.closedSize.width, collapse: {}),
-              size: notch.openSize, name: "panel")
+                        notchWidth: notch.closedSize.width, flattenList: true, collapse: {}),
+              size: notch.openSize(sessionCount: count), name: "panel")
 
         // ScrollView renders blank under ImageRenderer, so check the rows on their own.
         let rows = VStack(spacing: 0) {
