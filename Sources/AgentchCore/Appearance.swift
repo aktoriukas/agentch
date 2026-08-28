@@ -69,16 +69,22 @@ public struct Appearance: Codable, Sendable, Equatable {
 
 /// Deep links that reopen a session in the app that owns it.
 public enum SessionLink {
+    /// Claude validates the id against a plain UUID before it will act on the link.
+    static func isUUID(_ value: String) -> Bool {
+        UUID(uuidString: value) != nil
+    }
+
     /// Both apps register a URL scheme; these are the routes their own menus use.
     public static func url(for session: AgentSession) -> URL? {
         guard let id = session.linkID, !id.isEmpty else { return nil }
         switch session.provider {
         case .claude:
-            var components = URLComponents(string: "claude://code/continue")
-            components?.queryItems = [
-                URLQueryItem(name: "session", value: id),
-                URLQueryItem(name: "source", value: "agentch"),
-            ]
+            // `resume` imports a CLI session by its transcript UUID. Not `code/continue`, which
+            // only accepts "last" or the desktop app's own `local_`-prefixed session ids and
+            // silently rejects anything else.
+            guard isUUID(id) else { return nil }
+            var components = URLComponents(string: "claude://resume")
+            components?.queryItems = [URLQueryItem(name: "session", value: id)]
             return components?.url
         case .codex:
             return URL(string: "codex://threads/\(id)")

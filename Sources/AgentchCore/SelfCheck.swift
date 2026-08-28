@@ -208,6 +208,24 @@ public enum SelfCheck {
         expect(!HoverFields.load(defaults).isEmpty, "an empty selection is still a valid choice")
         defaults.removePersistentDomain(forName: suite)
 
+        // Deep links. Claude silently ignores a link whose id it cannot validate, so the shape
+        // matters more than it looks.
+        func session(_ provider: Provider, link: String?) -> AgentSession {
+            AgentSession(id: "x", provider: provider, title: "t", linkID: link,
+                         state: .working, lastActivity: now)
+        }
+        let uuid = "47c640af-5b60-423b-b9e9-c1cc6c1fe804"
+        let claudeURL = SessionLink.url(for: session(.claude, link: uuid))
+        expect(claudeURL?.absoluteString == "claude://resume?session=\(uuid)",
+               "claude uses the resume route, which imports CLI sessions by UUID")
+        expect(SessionLink.url(for: session(.claude, link: "local_abc")) == nil,
+               "a non-UUID claude id makes no link rather than one that silently fails")
+        expect(SessionLink.url(for: session(.codex, link: "01a03d60-190e-78c1")) 
+               == URL(string: "codex://threads/01a03d60-190e-78c1"),
+               "codex opens threads by id")
+        expect(SessionLink.url(for: session(.claude, link: nil)) == nil, "no id, no link")
+        expect(SessionLink.url(for: session(.codex, link: "")) == nil, "empty id, no link")
+
         if failures.isEmpty {
             print("selfcheck: ok")
             return true
