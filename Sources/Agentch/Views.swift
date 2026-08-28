@@ -107,15 +107,20 @@ struct NotchRootView: View {
 
     @ViewBuilder
     private var content: some View {
+        // .identity everywhere: content must vanish the instant a stage ends, never cross-fade
+        // with the frame that is still moving.
         switch vm.stage {
         case .closed:
             ClosedView(vm: vm, state: state)
+                .transition(.identity)
         case .peek:
-            PeekView(state: state, topInset: vm.closedSize.height, animates: !motion.isInstant,
+            PeekView(state: state, topInset: vm.closedSize.height, reveal: motion.reveal,
                      expand: { vm.setStage(.open, motion: motion) })
+                .transition(.identity)
         case .open:
-            PanelView(state: state, topInset: vm.closedSize.height, animates: !motion.isInstant,
+            PanelView(state: state, topInset: vm.closedSize.height, reveal: motion.reveal,
                       collapse: { vm.setStage(.peek, motion: motion) })
+                .transition(.identity)
         }
     }
 }
@@ -166,7 +171,7 @@ struct ClosedView: View {
 struct PeekView: View {
     var state: AppState
     var topInset: CGFloat = 24
-    var animates = true
+    var reveal: RevealSpec = .off
     var expand: () -> Void
 
     private var sessions: [AgentSession] { state.activeSessions }
@@ -174,26 +179,26 @@ struct PeekView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header.staggered(row: 0, enabled: animates)
+            header.staggered(row: 0, spec: reveal)
             if sessions.isEmpty {
                 Text("No active sessions")
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: NotchViewModel.peekRowHeight)
-                    .staggered(row: 1, enabled: animates)
+                    .staggered(row: 1, spec: reveal)
             }
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, session in
                 CompactSessionRow(session: session, fields: state.hoverFields, parity: state.parity)
                     .frame(height: NotchViewModel.peekRowHeight)
-                    .staggered(row: index + 1, enabled: animates)
+                    .staggered(row: index + 1, spec: reveal)
             }
             if sessions.count > NotchViewModel.peekRowLimit {
                 Text("+\(sessions.count - NotchViewModel.peekRowLimit) more")
                     .font(.system(size: 9))
                     .foregroundStyle(.white.opacity(0.35))
                     .frame(height: 16)
-                    .staggered(row: shown.count + 1, enabled: animates)
+                    .staggered(row: shown.count + 1, spec: reveal)
             }
         }
         .padding(.horizontal, 14)
@@ -300,7 +305,7 @@ struct IconButton: View {
 struct PanelView: View {
     var state: AppState
     var topInset: CGFloat = 24
-    var animates = true
+    var reveal: RevealSpec = .off
     var collapse: () -> Void
     @State private var filter: Provider?
 
@@ -311,8 +316,8 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header.staggered(row: 0, enabled: animates)
-            limitsRow.staggered(row: 1, enabled: animates)
+            header.staggered(row: 0, spec: reveal)
+            limitsRow.staggered(row: 1, spec: reveal)
             Divider().overlay(.white.opacity(0.1))
             ScrollView {
                 VStack(spacing: 0) {
@@ -321,11 +326,11 @@ struct PanelView: View {
                             SessionRow(session: session, parity: state.parity)
                             Divider().overlay(.white.opacity(0.06))
                         }
-                        .staggered(row: index + 2, enabled: animates)
+                        .staggered(row: index + 2, spec: reveal)
                     }
                 }
             }
-            footer.staggered(row: visibleSessions.count + 2, enabled: animates)
+            footer.staggered(row: visibleSessions.count + 2, spec: reveal)
         }
         .padding(.horizontal, 16)
         .padding(.top, topInset + 6)

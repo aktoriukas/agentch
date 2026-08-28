@@ -44,7 +44,7 @@ enum DevRender {
     /// reveal is shared — so that is all this compares.
     private static func midTransition(_ style: NotchAnimation, state: AppState, vm: NotchViewModel) -> some View {
         let bulge = style.motion.bulgeAmount * 0.7
-        return PeekView(state: state, topInset: vm.closedSize.height, animates: false, expand: {})
+        return PeekView(state: state, topInset: vm.closedSize.height, expand: {})
             .frame(width: 470, height: vm.peekSize(sessionCount: state.activeSessions.count).height)
             .background(NotchShape(bulge: bulge).fill(.black))
             .clipShape(NotchShape(bulge: bulge))
