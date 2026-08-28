@@ -102,6 +102,8 @@ public actor CodexMonitor {
                 cwd: cwd,
                 gitBranch: thread?.gitBranch,
                 model: model,
+                // Codex opens threads by their catalogue id, not the rollout file name.
+                linkID: thread?.id ?? summary.id,
                 state: age < Self.workingWindow ? .working : (age < Self.idleWindow ? .idle : .done),
                 tokens: summary.tokens,
                 estCostUSD: pricing.price(provider: .codex, model: model)?.cost(summary.tokens),

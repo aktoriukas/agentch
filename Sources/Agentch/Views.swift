@@ -156,6 +156,7 @@ struct PeekView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
+            AllocationBar(sessions: sessions, appearance: state.appearance, parity: state.parity)
             if sessions.isEmpty {
                 Text("No active sessions")
                     .font(.system(size: 11))
@@ -164,7 +165,8 @@ struct PeekView: View {
                     .frame(height: NotchViewModel.peekRowHeight)
             }
             ForEach(shown) { session in
-                CompactSessionRow(session: session, fields: state.hoverFields, parity: state.parity)
+                CompactSessionRow(session: session, fields: state.hoverFields,
+                                  parity: state.parity, appearance: state.appearance)
                     .frame(height: NotchViewModel.peekRowHeight)
             }
             if sessions.count > NotchViewModel.peekRowLimit {
@@ -178,8 +180,6 @@ struct PeekView: View {
         .padding(.top, topInset + 4)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: expand)
     }
 
     private var header: some View {
@@ -194,18 +194,29 @@ struct PeekView: View {
                     .foregroundStyle(.orange)
             }
             Spacer()
-            IconButton(symbol: "gearshape") { state.showMenu?() }
-            IconButton(symbol: "chevron.down", action: expand)
+            IconButton(symbol: "gearshape") { state.showSettings?() }
+            // The expander is the one control people reach for; give it a real target.
+            IconButton(symbol: "chevron.down", size: 14, target: 26, action: expand)
         }
         .frame(height: NotchViewModel.peekHeaderHeight)
+        // Rows open their own session, so the header carries the expand tap.
+        .contentShape(Rectangle())
+        .onTapGesture(perform: expand)
     }
 }
 
 /// One line per session: who it is and what it is doing, plus whichever numbers you asked for.
+/// Clicking it reopens the session in the app that owns it.
 struct CompactSessionRow: View {
     var session: AgentSession
     var fields: HoverFields
     var parity: TokenParity
+    var appearance: Appearance
+    @State private var hovering = false
+
+    private var providerColor: Color { Color(hex: appearance.color(for: session.provider)) }
+    private var modelColor: Color? { session.model.map { Color(hex: appearance.color(forModel: $0)) } }
+    private var canOpen: Bool { SessionLink.url(for: session) != nil }
 
     var body: some View {
         HStack(spacing: 7) {
@@ -213,8 +224,8 @@ struct CompactSessionRow: View {
                 .fill(session.state.color)
                 .frame(width: 5, height: 5)
             Image(systemName: session.provider.symbol)
-                .font(.system(size: 8))
-                .foregroundStyle(.white.opacity(0.35))
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(providerColor)
             Text(session.title)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.92))
@@ -228,12 +239,18 @@ struct CompactSessionRow: View {
             }
             if fields.contains(.model), let model = session.model {
                 Text(model)
-                    .font(.system(size: 9))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundStyle(modelColor ?? .white.opacity(0.35))
                     .lineLimit(1)
             }
 
             Spacer(minLength: 6)
+
+            if hovering, canOpen {
+                Image(systemName: "arrow.up.forward.app")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
 
             if fields.contains(.context), let context = session.contextFraction {
                 Text(Format.percent(context))
@@ -254,22 +271,95 @@ struct CompactSessionRow: View {
                     .foregroundStyle(.white.opacity(0.8))
             }
         }
+        .padding(.horizontal, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 5)
+                .fill(.white.opacity(hovering && canOpen ? 0.08 : 0))
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture { session.open() }
+    }
+}
+
+extension AgentSession {
+    /// Hands the session back to the app that owns it.
+    func open() {
+        guard let url = SessionLink.url(for: self) else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 
 struct IconButton: View {
     var symbol: String
+    var size: CGFloat = 11
+    var target: CGFloat = 18
     var action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.white.opacity(0.5))
-                .frame(width: 16, height: 16)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(.white.opacity(hovering ? 0.95 : 0.55))
+                .frame(width: target, height: target)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(.white.opacity(hovering ? 0.12 : 0))
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
+}
+
+/// Where the tokens went, as one compact bar. Each segment is a session, coloured by its model.
+struct AllocationBar: View {
+    var sessions: [AgentSession]
+    var appearance: Appearance
+    var parity: TokenParity
+
+    private var shares: [(id: String, share: Double, color: Color)] {
+        let counted = sessions.map { (id: $0.id, tokens: parity.count($0.tokens), model: $0.model) }
+        let total = counted.reduce(0) { $0 + $1.tokens }
+        guard total > 0 else { return [] }
+        return counted.filter { $0.tokens > 0 }.map {
+            (id: $0.id,
+             share: Double($0.tokens) / Double(total),
+             color: Color(hex: $0.model.map { appearance.color(forModel: $0) } ?? "#5A5A5A"))
+        }
+    }
+
+    private var totalTokens: Int { sessions.reduce(0) { $0 + parity.count($1.tokens) } }
+    private var totalCost: Double { sessions.compactMap(\.estCostUSD).reduce(0, +) }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            GeometryReader { geo in
+                HStack(spacing: 1) {
+                    ForEach(shares, id: \.id) { segment in
+                        Capsule()
+                            .fill(segment.color)
+                            .frame(width: max(1, geo.size.width * segment.share - 1))
+                    }
+                    if shares.isEmpty {
+                        Capsule().fill(.white.opacity(0.1))
+                    }
+                }
+                .frame(height: 4)
+                .frame(maxHeight: .infinity, alignment: .center)
+            }
+            Text(Format.tokens(totalTokens))
+                .font(.system(size: 9, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.55))
+            Text(Format.usd(totalCost))
+                .font(.system(size: 9, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.75))
+        }
+        .frame(height: NotchViewModel.peekAllocationHeight)
     }
 }
 
@@ -294,7 +384,7 @@ struct PanelView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(visibleSessions) { session in
-                        SessionRow(session: session, parity: state.parity)
+                        SessionRow(session: session, parity: state.parity, appearance: state.appearance)
                         Divider().overlay(.white.opacity(0.06))
                     }
                 }
@@ -322,7 +412,7 @@ struct PanelView: View {
                         .foregroundStyle(.orange)
                 }
             }
-            IconButton(symbol: "gearshape") { state.showMenu?() }
+            IconButton(symbol: "gearshape") { state.showSettings?() }
             IconButton(symbol: "chevron.up", action: collapse)
         }
     }
@@ -423,6 +513,8 @@ struct LimitBar: View {
 struct SessionRow: View {
     var session: AgentSession
     var parity: TokenParity
+    var appearance: Appearance
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -433,17 +525,24 @@ struct SessionRow: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Image(systemName: session.provider.symbol)
-                        .font(.system(size: 8))
-                        .foregroundStyle(.white.opacity(0.4))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(Color(hex: appearance.color(for: session.provider)))
                     Text(session.title)
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(.white.opacity(0.92))
                         .lineLimit(1)
                 }
-                Text(subtitle)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.white.opacity(0.45))
-                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if let model = session.model {
+                        Text(model)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(Color(hex: appearance.color(forModel: model)))
+                    }
+                    Text(subtitle)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.white.opacity(0.45))
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 8)
@@ -472,11 +571,19 @@ struct SessionRow: View {
             }
         }
         .padding(.vertical, 8)
+        .padding(.horizontal, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.white.opacity(hovering && SessionLink.url(for: session) != nil ? 0.07 : 0))
+        )
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
+        .onTapGesture { session.open() }
     }
 
     private var subtitle: String {
-        // What it is doing beats what state it is in, when the session says.
-        [session.projectName, session.gitBranch, session.model, session.activity ?? session.state.label]
+        // The model is shown separately, in its own colour.
+        [session.projectName, session.gitBranch, session.activity ?? session.state.label]
             .compactMap { $0 }
             .joined(separator: " · ")
     }

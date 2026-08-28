@@ -47,7 +47,9 @@ final class NotchViewModel {
     // MARK: - Sizing
 
     static let peekRowHeight: CGFloat = 27
-    static let peekHeaderHeight: CGFloat = 19
+    static let peekHeaderHeight: CGFloat = 26
+    /// The token allocation strip, shown without expanding.
+    static let peekAllocationHeight: CGFloat = 14
     /// Beyond this the hover would cover half the screen; the rest live behind "show all".
     static let peekRowLimit = 7
 
@@ -56,7 +58,8 @@ final class NotchViewModel {
         let overflow: CGFloat = sessionCount > Self.peekRowLimit ? 16 : 0
         let width: CGFloat = max(closedSize.width + 300, 470)
         let listHeight: CGFloat = rows * Self.peekRowHeight
-        let chrome: CGFloat = closedSize.height + Self.peekHeaderHeight + 18
+        let chrome: CGFloat = closedSize.height + Self.peekHeaderHeight
+            + Self.peekAllocationHeight + 22
         return CGSize(width: width, height: chrome + listHeight + overflow)
     }
 
@@ -148,10 +151,9 @@ final class NotchController {
         case .closed:
             if rect(for: .closed).contains(point) { vm.setStage(.peek) }
         case .peek:
-            // While a menu is up the pointer wanders off; keep the panel open behind it.
-            if !rect(for: .peek).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
+            if !rect(for: .peek).contains(point) { vm.setStage(.closed) }
         case .open:
-            if !rect(for: .open).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
+            if !rect(for: .open).contains(point) { vm.setStage(.closed) }
         }
     }
 

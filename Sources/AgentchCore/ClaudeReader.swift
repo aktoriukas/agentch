@@ -121,6 +121,7 @@ public actor ClaudeMonitor {
                 cwd: cursor.cwd ?? live?.cwd,
                 gitBranch: cursor.gitBranch == "HEAD" ? nil : cursor.gitBranch,
                 model: cursor.model,
+                linkID: file.sessionId,
                 // The registry is the authority on whether the session still exists.
                 state: state,
                 activity: live == nil ? nil : currentTask(sessionId: file.sessionId),

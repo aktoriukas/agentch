@@ -20,8 +20,9 @@ a notched built-in.
 
 - **closed** — ambient only: active session count, a tint that shifts green → amber → red as your
   worst limit window fills, and an orange dot when a session is waiting on you.
-- **hover** — every active session, one line each, sized to fit however many there are; plus a gear
-  for settings and a chevron to expand.
+- **hover** — every active session, one line each, sized to fit however many there are, above a
+  compact bar showing how the token spend is split between them; plus a gear for settings and a
+  chevron to expand. Clicking a session reopens it in the app that owns it.
 - **click** — the full panel: limit gauges per provider with reset countdowns, the session feed
   filterable per provider with model, branch, context use, tokens and estimated cost, and how long
   until a limit window fills at the current burn rate.
@@ -29,9 +30,10 @@ a notched built-in.
 Every stage change is instant — the panel and its content are simply there, with no animation to
 sit through.
 
-The gear — in the hover as well as the panel — holds the settings: which displays to appear on,
-which per-session details the hover carries, whether to count cache tokens, launch at login, and
-whether to detect sessions waiting on you.
+The gear — in the hover as well as the panel — opens a settings window: which displays to appear
+on, a colour per agent and per model, which per-session details the hover carries, whether to count
+cache tokens, launch at login, and whether to detect sessions waiting on you. Models start on a
+colour derived from their name, so they are distinguishable before anyone picks anything.
 
 ### Detecting sessions that are waiting on you
 

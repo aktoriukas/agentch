@@ -15,7 +15,8 @@ public struct HoverFields: OptionSet, Sendable {
     public static let tokens = HoverFields(rawValue: 1 << 3)
     public static let cost = HoverFields(rawValue: 1 << 4)
 
-    public static let standard: HoverFields = [.project, .context, .cost]
+    /// Agent and model are both colour-coded, so the model earns its place by default.
+    public static let standard: HoverFields = [.project, .model, .context, .cost]
 
     /// Menu order, with the labels used in settings.
     public static let choices: [(field: HoverFields, label: String)] = [

@@ -79,6 +79,8 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
     public var cwd: String?
     public var gitBranch: String?
     public var model: String?
+    /// Identifier the owning app uses to reopen this session, when it can be reopened.
+    public var linkID: String?
     public var state: SessionState
     /// What the agent is doing right now, when it publishes a task list ("Writing the parser").
     public var activity: String?
@@ -90,7 +92,8 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
     public var lastActivity: Date
 
     public init(id: String, provider: Provider, title: String, cwd: String? = nil,
-                gitBranch: String? = nil, model: String? = nil, state: SessionState,
+                gitBranch: String? = nil, model: String? = nil, linkID: String? = nil,
+                state: SessionState,
                 activity: String? = nil, tokens: TokenTotals = .init(), estCostUSD: Double? = nil,
                 contextFraction: Double? = nil, lastActivity: Date) {
         self.id = id
@@ -99,6 +102,7 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
         self.cwd = cwd
         self.gitBranch = gitBranch
         self.model = model
+        self.linkID = linkID
         self.state = state
         self.activity = activity
         self.tokens = tokens

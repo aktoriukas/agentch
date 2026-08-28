@@ -11,11 +11,11 @@ final class AppState {
     }
     var parity: TokenParity = TokenParity(rawValue: UserDefaults.standard.string(forKey: "tokenParity") ?? "") ?? .all
     /// Set by the app delegate; the gear button in the hover and the panel call it.
-    var showMenu: (() -> Void)?
-    /// True while the settings menu is up, so the panel does not close behind it.
-    var menuIsOpen = false
+    var showSettings: (() -> Void)?
     /// Which per-session details the hover shows.
     var hoverFields: HoverFields = HoverFields.load()
+    /// Colours for agents and models.
+    var appearance: Appearance = Appearance.load()
     private var burn = BurnTracker()
 
     /// The limit window closest to running out before it resets, if any is on track to.
@@ -26,6 +26,11 @@ final class AppState {
 
     var activeSessions: [AgentSession] {
         sessions.filter { $0.state != .done }.sorted { $0.lastActivity > $1.lastActivity }
+    }
+
+    /// Every model seen in the current scans, for the colour list in settings.
+    var knownModels: [String] {
+        Array(Set(sessions.compactMap(\.model))).sorted()
     }
 
     var attentionCount: Int { sessions.filter { $0.state == .needsAttention }.count }
@@ -62,13 +67,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let claudeUsage = ClaudeUsageClient()
     private var pricing = PricingTable()
     private var refreshTimer: Timer?
+    private var settings: SettingsWindowController?
     /// A refresh can block on a Keychain prompt; without this, ticks pile up behind it.
     private var isRefreshing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        state.showMenu = { [weak self] in self?.showMenu() }
+        let settings = SettingsWindowController(
+            state: state,
+            enabledDisplays: { [weak self] in Set(self?.enabledScreens().map(\.displayID) ?? []) },
+            toggleDisplay: { [weak self] id in self?.toggleDisplay(id) },
+            refresh: { [weak self] in Task { @MainActor in await self?.refresh() } })
+        self.settings = settings
+        state.showSettings = { settings.show() }
         rebuildControllers()
         startRefreshing()
+        if CommandLine.arguments.contains("--settings") { state.showSettings?() }
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in
             MainActor.assumeIsolated { AppDelegate.currentPointer(self) }
@@ -129,14 +142,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func currentPointer(_ delegate: AppDelegate) {
         let point = NSEvent.mouseLocation
         for controller in delegate.controllers { controller.pointerMoved(to: point) }
-    }
-
-    private func showMenu() {
-        AppMenu.show(state: state,
-                     enabledDisplays: Set(enabledScreens().map(\.displayID)),
-                     at: NSEvent.mouseLocation,
-                     toggleDisplay: { [weak self] id in self?.toggleDisplay(id) },
-                     refresh: { [weak self] in Task { @MainActor in await self?.refresh() } })
     }
 
     private func toggleDisplay(_ id: CGDirectDisplayID) {

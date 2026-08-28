@@ -27,12 +27,30 @@ enum DevRender {
         // ScrollView renders blank under ImageRenderer, so check the rows on their own.
         let rows = VStack(spacing: 0) {
             ForEach(state.activeSessions) { session in
-                SessionRow(session: session, parity: state.parity)
+                SessionRow(session: session, parity: state.parity, appearance: state.appearance)
                 Divider().overlay(.white.opacity(0.06))
             }
         }
         .padding(.horizontal, 16)
         write(rows, size: CGSize(width: 680, height: 220), name: "rows")
+
+        // The settings window, which cannot be screenshotted here either.
+        let settings = SettingsView(state: state,
+                                    enabledDisplays: { [] },
+                                    toggleDisplay: { _ in },
+                                    refresh: {})
+            .content
+            .frame(width: 460)
+            .background(Color(white: 0.12))
+            .environment(\.colorScheme, .dark)
+        let renderer = ImageRenderer(content: settings)
+        renderer.scale = 2
+        if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+           let bitmap = NSBitmapImageRep(data: tiff),
+           let png = bitmap.representation(using: .png, properties: [:]) {
+            try? png.write(to: URL(fileURLWithPath: "/tmp/agentch-settings.png"))
+            print("wrote /tmp/agentch-settings.png")
+        }
 
     }
 
