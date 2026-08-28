@@ -3,21 +3,37 @@ import AgentchCore
 
 // MARK: - Shape
 
-/// Flush against the top screen edge, rounded along the bottom — the notch silhouette.
+/// Flush against the top screen edge, rounded along the bottom. `bulge` sags the bottom edge
+/// mid-transition so the panel appears to pour out of the notch rather than snap open.
 struct NotchShape: Shape {
     var cornerRadius: CGFloat = 13
+    var bulge: CGFloat = 0
+
+    var animatableData: CGFloat {
+        get { bulge }
+        set { bulge = newValue }
+    }
 
     func path(in rect: CGRect) -> Path {
-        let r = min(cornerRadius, rect.height / 2, rect.width / 2)
+        // Rounder while it is moving; the corners tighten as the shape settles.
+        let r = min(cornerRadius + bulge * 5, rect.height / 2, rect.width / 2)
+        let sag = bulge * min(18, rect.height * 0.35)
+        // Pinched at the top mid-transition, as though the panel is being drawn out of the notch.
+        let pinch = bulge * min(16, rect.width * 0.06)
+
         var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
+        path.move(to: CGPoint(x: rect.minX + pinch, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r),
+                          control: CGPoint(x: rect.minX + pinch * 0.25, y: rect.midY))
         path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY),
                           control: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.maxY))
+        // The sagging middle is what reads as liquid.
+        path.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
+                          control: CGPoint(x: rect.midX, y: rect.maxY + sag))
         path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY - r),
                           control: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addQuadCurve(to: CGPoint(x: rect.maxX - pinch, y: rect.minY),
+                          control: CGPoint(x: rect.maxX - pinch * 0.25, y: rect.midY))
         path.closeSubpath()
         return path
     }
@@ -67,21 +83,28 @@ extension Provider {
 // MARK: - Root
 
 struct NotchRootView: View {
-    @Bindable var vm: NotchViewModel
+    var vm: NotchViewModel
     var state: AppState
+
+    private var size: CGSize {
+        vm.size(for: vm.stage, sessionCount: state.activeSessions.count)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             content
-                .frame(width: vm.currentSize.width, height: vm.currentSize.height)
-                .background(NotchShape().fill(.black))
-                .clipShape(NotchShape())
-                .shadow(color: .black.opacity(vm.stage == .closed ? 0 : 0.45),
-                        radius: vm.stage == .closed ? 0 : 18, y: 6)
+                .opacity(vm.contentVisible ? 1 : 0)
+                // Content arrives slightly out of focus and settles, matching the shape's motion.
+                .blur(radius: vm.contentVisible ? 0 : 5)
+                .scaleEffect(vm.contentVisible ? 1 : 0.97, anchor: .top)
+                .frame(width: size.width, height: size.height)
+                .background(NotchShape(bulge: vm.bulge).fill(.black))
+                .clipShape(NotchShape(bulge: vm.bulge))
+                .shadow(color: .black.opacity(vm.stage == .closed ? 0 : 0.5),
+                        radius: vm.stage == .closed ? 0 : 20, y: 8)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: vm.stage)
     }
 
     @ViewBuilder
@@ -90,10 +113,9 @@ struct NotchRootView: View {
         case .closed:
             ClosedView(vm: vm, state: state)
         case .peek:
-            PeekView(state: state, topInset: vm.closedSize.height)
-                .onTapGesture { vm.stage = .open }
+            PeekView(state: state, topInset: vm.closedSize.height, expand: { vm.setStage(.open) })
         case .open:
-            PanelView(state: state, topInset: vm.closedSize.height)
+            PanelView(state: state, topInset: vm.closedSize.height, collapse: { vm.setStage(.peek) })
         }
     }
 }
@@ -139,67 +161,241 @@ struct ClosedView: View {
     }
 }
 
-// MARK: - Peek
+// MARK: - Peek: the session list
 
 struct PeekView: View {
     var state: AppState
-    /// Nothing drawn under the hardware cutout is visible, so content starts below it.
     var topInset: CGFloat = 24
+    var expand: () -> Void
+
+    private var sessions: [AgentSession] { state.activeSessions }
+    private var shown: [AgentSession] { Array(sessions.prefix(NotchViewModel.peekRowLimit)) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                Text("\(state.activeSessions.count) active")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Text("\(Format.usd(state.todayEstCost)) est.")
+        VStack(alignment: .leading, spacing: 0) {
+            header
+            if sessions.isEmpty {
+                Text("No active sessions")
                     .font(.system(size: 11))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: NotchViewModel.peekRowHeight)
             }
-
-            ForEach(Provider.allCases) { provider in
-                let limits = state.limits(for: provider)
-                if !limits.isEmpty || state.hasAnything(provider) {
-                    HStack(spacing: 8) {
-                        Text(provider.displayName)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.55))
-                            .frame(width: 44, alignment: .leading)
-                        if limits.isEmpty {
-                            Text(state.notice(for: provider) ?? "No limits reported")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.white.opacity(0.4))
-                        }
-                        ForEach(limits) { limit in
-                            LimitBar(limit: limit)
-                        }
-                    }
-                }
+            ForEach(shown) { session in
+                CompactSessionRow(session: session, fields: state.hoverFields, parity: state.parity)
+                    .frame(height: NotchViewModel.peekRowHeight)
             }
-
-            if state.attentionCount > 0 {
-                HStack(spacing: 5) {
-                    Circle().fill(Color.orange).frame(width: 5, height: 5)
-                    Text(attentionText)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                }
+            if sessions.count > NotchViewModel.peekRowLimit {
+                Text("+\(sessions.count - NotchViewModel.peekRowLimit) more")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .frame(height: 16)
             }
         }
         .padding(.horizontal, 14)
+        .padding(.top, topInset + 4)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: expand)
+    }
+
+    private var header: some View {
+        HStack(spacing: 6) {
+            Text("\(sessions.count) active")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.75))
+            if state.attentionCount > 0 {
+                Circle().fill(Color.orange).frame(width: 4, height: 4)
+                Text("\(state.attentionCount) waiting")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.orange)
+            }
+            Spacer()
+            IconButton(symbol: "gearshape") { state.showMenu?() }
+            IconButton(symbol: "chevron.down", action: expand)
+        }
+        .frame(height: NotchViewModel.peekHeaderHeight)
+    }
+}
+
+/// One line per session: who it is and what it is doing, plus whichever numbers you asked for.
+struct CompactSessionRow: View {
+    var session: AgentSession
+    var fields: HoverFields
+    var parity: TokenParity
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(session.state.color)
+                .frame(width: 5, height: 5)
+            Image(systemName: session.provider.symbol)
+                .font(.system(size: 8))
+                .foregroundStyle(.white.opacity(0.35))
+            Text(session.title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1)
+
+            if fields.contains(.project), let project = session.projectName {
+                Text(project)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.4))
+                    .lineLimit(1)
+            }
+            if fields.contains(.model), let model = session.model {
+                Text(model)
+                    .font(.system(size: 9))
+                    .foregroundStyle(.white.opacity(0.35))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 6)
+
+            if fields.contains(.context), let context = session.contextFraction {
+                Text(Format.percent(context))
+                    .font(.system(size: 9, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(LimitTier(fractionUsed: context).color.opacity(0.85))
+            }
+            if fields.contains(.tokens) {
+                Text(Format.tokens(parity.count(session.tokens)))
+                    .font(.system(size: 9))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+            if fields.contains(.cost) {
+                Text(session.estCostUSD.map(Format.usd) ?? "—")
+                    .font(.system(size: 10, weight: .medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.8))
+            }
+        }
+    }
+}
+
+struct IconButton: View {
+    var symbol: String
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.white.opacity(0.5))
+                .frame(width: 16, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Panel: the breakdown
+
+struct PanelView: View {
+    var state: AppState
+    var topInset: CGFloat = 24
+    var collapse: () -> Void
+    @State private var filter: Provider?
+
+    private var visibleSessions: [AgentSession] {
+        guard let filter else { return state.activeSessions }
+        return state.activeSessions.filter { $0.provider == filter }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            limitsRow
+            Divider().overlay(.white.opacity(0.1))
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(visibleSessions) { session in
+                        SessionRow(session: session, parity: state.parity)
+                        Divider().overlay(.white.opacity(0.06))
+                    }
+                }
+            }
+            footer
+        }
+        .padding(.horizontal, 16)
         .padding(.top, topInset + 6)
         .padding(.bottom, 12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
-    private var attentionText: String {
-        let waiting = state.sessions.filter { $0.state == .needsAttention }
-        guard let first = waiting.first else { return "" }
-        let name = first.projectName ?? first.title
-        return waiting.count == 1 ? "\(name) is waiting on you" : "\(waiting.count) sessions waiting on you"
+    private var header: some View {
+        HStack(spacing: 6) {
+            chip(title: "All", active: filter == nil) { filter = nil }
+            ForEach(Provider.allCases) { provider in
+                chip(title: provider.displayName, active: filter == provider) { filter = provider }
+            }
+            Spacer()
+            if state.attentionCount > 0 {
+                HStack(spacing: 4) {
+                    Circle().fill(Color.orange).frame(width: 5, height: 5)
+                    Text("\(state.attentionCount) waiting")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(.orange)
+                }
+            }
+            IconButton(symbol: "gearshape") { state.showMenu?() }
+            IconButton(symbol: "chevron.up", action: collapse)
+        }
+    }
+
+    private var limitsRow: some View {
+        HStack(alignment: .top, spacing: 18) {
+            ForEach(Provider.allCases) { provider in
+                let limits = state.limits(for: provider)
+                if filter == nil || filter == provider, state.hasAnything(provider) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(provider.displayName.uppercased())
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.4))
+                        if limits.isEmpty {
+                            Text(state.notice(for: provider) ?? "No limits reported")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
+                        HStack(spacing: 10) {
+                            ForEach(limits) { LimitBar(limit: $0).frame(width: 96) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func chip(title: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10, weight: .medium))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(active ? .white.opacity(0.18) : .white.opacity(0.06)))
+                .foregroundStyle(.white.opacity(active ? 0.95 : 0.55))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var footer: some View {
+        HStack {
+            Text("\(visibleSessions.count) sessions")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.45))
+            if let (limit, eta) = state.urgentProjection {
+                Text("· \(limit.provider.displayName) \(limit.kind.label) full in \(Format.countdown(to: eta))")
+                    .font(.system(size: 10))
+                    .foregroundStyle(LimitTier(fractionUsed: limit.fractionUsed).color.opacity(0.9))
+            }
+            Spacer()
+            Text("today ≈ \(Format.usd(state.todayEstCost)) est.")
+                .font(.system(size: 10))
+                .monospacedDigit()
+                .foregroundStyle(.white.opacity(0.45))
+        }
     }
 }
 
@@ -238,112 +434,6 @@ struct LimitBar: View {
                     .font(.system(size: 8))
                     .foregroundStyle(.white.opacity(0.35))
             }
-        }
-    }
-}
-
-// MARK: - Panel
-
-struct PanelView: View {
-    var state: AppState
-    var topInset: CGFloat = 24
-    @State private var filter: Provider?
-
-    private var visibleSessions: [AgentSession] {
-        guard let filter else { return state.activeSessions }
-        return state.activeSessions.filter { $0.provider == filter }
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            header
-
-            HStack(alignment: .top, spacing: 18) {
-                ForEach(Provider.allCases) { provider in
-                    let limits = state.limits(for: provider)
-                    if !limits.isEmpty, filter == nil || filter == provider {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(provider.displayName.uppercased())
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.4))
-                            HStack(spacing: 10) {
-                                ForEach(limits) { LimitBar(limit: $0).frame(width: 96) }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Divider().overlay(.white.opacity(0.1))
-
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(visibleSessions) { session in
-                        SessionRow(session: session, parity: state.parity)
-                        Divider().overlay(.white.opacity(0.06))
-                    }
-                }
-            }
-
-            footer
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, topInset + 8)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    }
-
-    private var header: some View {
-        HStack(spacing: 6) {
-            chip(title: "All", active: filter == nil) { filter = nil }
-            ForEach(Provider.allCases) { provider in
-                chip(title: provider.displayName, active: filter == provider) { filter = provider }
-            }
-            Spacer()
-            if state.attentionCount > 0 {
-                HStack(spacing: 4) {
-                    Circle().fill(Color.orange).frame(width: 5, height: 5)
-                    Text("\(state.attentionCount) waiting")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.orange)
-                }
-            }
-            Button { state.showMenu?() } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.white.opacity(0.5))
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private func chip(title: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 10, weight: .medium))
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(active ? .white.opacity(0.18) : .white.opacity(0.06)))
-                .foregroundStyle(.white.opacity(active ? 0.95 : 0.55))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var footer: some View {
-        HStack {
-            Text("\(visibleSessions.count) sessions")
-                .font(.system(size: 10))
-                .foregroundStyle(.white.opacity(0.45))
-            if let (limit, eta) = state.urgentProjection {
-                Text("· \(limit.provider.displayName) \(limit.kind.label) full in \(Format.countdown(to: eta))")
-                    .font(.system(size: 10))
-                    .foregroundStyle(LimitTier(fractionUsed: limit.fractionUsed).color.opacity(0.9))
-            }
-            Spacer()
-            Text("today ≈ \(Format.usd(state.todayEstCost)) est.")
-                .font(.system(size: 10))
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.45))
         }
     }
 }

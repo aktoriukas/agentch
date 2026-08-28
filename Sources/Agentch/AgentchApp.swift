@@ -10,8 +10,12 @@ final class AppState {
         didSet { burn.record(limits) }
     }
     var parity: TokenParity = TokenParity(rawValue: UserDefaults.standard.string(forKey: "tokenParity") ?? "") ?? .all
-    /// Set by the app delegate; the panel's gear button calls it.
+    /// Set by the app delegate; the gear button in the hover and the panel call it.
     var showMenu: (() -> Void)?
+    /// True while the settings menu is up, so the panel does not close behind it.
+    var menuIsOpen = false
+    /// Which per-session details the hover shows.
+    var hoverFields: HoverFields = HoverFields.load()
     private var burn = BurnTracker()
 
     /// The limit window closest to running out before it resets, if any is on track to.

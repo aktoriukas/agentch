@@ -36,6 +36,17 @@ enum AppMenu {
         displayItem.submenu = displays
         menu.addItem(displayItem)
 
+        let fields = NSMenu()
+        for (field, label) in HoverFields.choices {
+            fields.addItem(item(label, checked: state.hoverFields.contains(field)) {
+                state.hoverFields.formSymmetricDifference(field)
+                state.hoverFields.save()
+            })
+        }
+        let fieldsItem = NSMenuItem(title: "Hover shows", action: nil, keyEquivalent: "")
+        fieldsItem.submenu = fields
+        menu.addItem(fieldsItem)
+
         menu.addItem(.separator())
         menu.addItem(item("Count cache tokens", checked: state.parity == .all) {
             state.parity = state.parity == .all ? .conversational : .all
@@ -58,7 +69,10 @@ enum AppMenu {
         menu.addItem(item("Refresh now", checked: false, action: refresh))
         menu.addItem(item("Quit agentch", checked: false) { NSApp.terminate(nil) })
 
+        // The pointer leaves the panel to use the menu; hold the panel open until it closes.
+        state.menuIsOpen = true
         menu.popUp(positioning: nil, at: point, in: nil)
+        state.menuIsOpen = false
     }
 
     private static func item(_ title: String, checked: Bool, action: @escaping () -> Void) -> NSMenuItem {

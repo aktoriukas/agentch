@@ -27,12 +27,11 @@ enum NotchStage {
 @MainActor
 @Observable
 final class NotchViewModel {
-    var stage: NotchStage = .closed {
-        didSet {
-            guard stage != oldValue else { return }
-            onStageChange?(stage)
-        }
-    }
+    private(set) var stage: NotchStage = .closed
+    /// How far the panel's bottom edge sags mid-transition, 0...1. Drives the liquid feel.
+    private(set) var bulge: CGFloat = 0
+    /// Content is held back until the shape has finished travelling.
+    private(set) var contentVisible = true
 
     let closedSize: CGSize
     let isRealNotch: Bool
@@ -43,19 +42,48 @@ final class NotchViewModel {
         self.isRealNotch = isRealNotch
     }
 
-    /// Height follows the closed height: content sits below the cutout, so a taller notch needs a taller peek.
-    var peekSize: CGSize { CGSize(width: max(closedSize.width + 280, 440), height: closedSize.height + 116) }
-    var openSize: CGSize { CGSize(width: 680, height: 460) }
+    /// The shape settles first and the content arrives after, so the panel reads as filling up
+    /// rather than popping into place.
+    func setStage(_ new: NotchStage) {
+        guard new != stage else { return }
+        let opening = new != .closed
 
-    func size(for stage: NotchStage) -> CGSize {
+        contentVisible = false
+        bulge = opening ? 1 : 0.55
+        withAnimation(.spring(response: 0.46, dampingFraction: 0.68)) { stage = new }
+        // Lower damping than the size change, so the edge keeps wobbling after it arrives.
+        withAnimation(.spring(response: 0.62, dampingFraction: 0.42).delay(0.02)) { bulge = 0 }
+        withAnimation(.easeOut(duration: opening ? 0.2 : 0.12).delay(opening ? 0.15 : 0)) {
+            contentVisible = true
+        }
+        onStageChange?(new)
+    }
+
+    // MARK: - Sizing
+
+    static let peekRowHeight: CGFloat = 27
+    static let peekHeaderHeight: CGFloat = 19
+    /// Beyond this the hover would cover half the screen; the rest live behind "show all".
+    static let peekRowLimit = 7
+
+    func peekSize(sessionCount: Int) -> CGSize {
+        let rows = CGFloat(min(max(sessionCount, 1), Self.peekRowLimit))
+        let overflow: CGFloat = sessionCount > Self.peekRowLimit ? 16 : 0
+        let width: CGFloat = max(closedSize.width + 300, 470)
+        let listHeight: CGFloat = rows * Self.peekRowHeight
+        let chrome: CGFloat = closedSize.height + Self.peekHeaderHeight + 18
+        return CGSize(width: width, height: chrome + listHeight + overflow)
+    }
+
+    var openSize: CGSize { CGSize(width: 700, height: 470) }
+
+    func size(for stage: NotchStage, sessionCount: Int) -> CGSize {
         switch stage {
         case .closed: closedSize
-        case .peek: peekSize
+        case .peek: peekSize(sessionCount: sessionCount)
         case .open: openSize
         }
     }
-
-    var currentSize: CGSize { size(for: stage) }
 }
 
 final class NotchPanel: NSPanel {
@@ -87,18 +115,21 @@ final class NotchController {
     let displayID: CGDirectDisplayID
     private let panel: NotchPanel
     private let vm: NotchViewModel
+    private let state: AppState
     private var screenFrame: CGRect
 
     init(screen: NSScreen, state: AppState) {
         displayID = screen.displayID
         screenFrame = screen.frame
+        self.state = state
         // A few points taller than the hardware cutout, so the ambient sliver clears it.
         let notch = screen.notchSize
         let closed = screen.hasNotch ? CGSize(width: notch.width, height: notch.height + 3) : notch
         vm = NotchViewModel(closedSize: closed, isRealNotch: screen.hasNotch)
 
-        let windowSize = CGSize(width: min(vm.openSize.width, screen.frame.width - 40),
-                                height: vm.openSize.height)
+        // Extra height so the bottom edge can sag past the panel without being clipped.
+        let windowSize = CGSize(width: min(vm.openSize.width + 40, screen.frame.width - 40),
+                                height: vm.openSize.height + 30)
         panel = NotchPanel(contentRect: NotchGeometry.topCentered(size: windowSize, in: screen.frame))
 
         let hosting = NSHostingView(rootView: NotchRootView(vm: vm, state: state))
@@ -110,7 +141,7 @@ final class NotchController {
             guard let self else { return }
             // Only interactive while the pointer is provably over the content.
             panel.ignoresMouseEvents = (stage == .closed)
-            log("stage=\(stage) frame=\(panel.frame.integral) content=\(vm.size(for: stage))")
+            log("stage=\(stage) content=\(vm.size(for: stage, sessionCount: state.activeSessions.count))")
         }
         log("panel up: notch=\(screen.hasNotch) closed=\(vm.closedSize) frame=\(panel.frame.integral)")
     }
@@ -120,19 +151,22 @@ final class NotchController {
         fflush(stdout)
     }
 
-    /// Rect the pointer must be inside for `stage` to hold, in global coordinates.
+    /// Rect the pointer must be inside for `stage` to hold, in global coordinates. The peek grows
+    /// with the session list, so its target is recomputed rather than fixed.
     private func rect(for stage: NotchStage) -> CGRect {
-        NotchGeometry.hoverTarget(NotchGeometry.topCentered(size: vm.size(for: stage), in: screenFrame))
+        let size = vm.size(for: stage, sessionCount: state.activeSessions.count)
+        return NotchGeometry.hoverTarget(NotchGeometry.topCentered(size: size, in: screenFrame))
     }
 
     func pointerMoved(to point: CGPoint) {
         switch vm.stage {
         case .closed:
-            if rect(for: .closed).contains(point) { vm.stage = .peek }
+            if rect(for: .closed).contains(point) { vm.setStage(.peek) }
         case .peek:
-            if !rect(for: .peek).contains(point) { vm.stage = .closed }
+            // While a menu is up the pointer wanders off; keep the panel open behind it.
+            if !rect(for: .peek).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
         case .open:
-            if !rect(for: .open).contains(point) { vm.stage = .closed }
+            if !rect(for: .open).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
         }
     }
 
