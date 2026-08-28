@@ -22,38 +22,40 @@ struct NotchMotion {
 }
 
 extension NotchAnimation {
+    /// Deliberately small: short travel, near-critical damping, displacements measured in a few
+    /// points. The panel should look precise, not springy.
     var motion: NotchMotion {
         switch self {
         case .liquid:
-            // The edge keeps moving after the size lands, which is what sells the pour.
-            NotchMotion(size: .spring(response: 0.46, dampingFraction: 0.68),
-                        bulge: .spring(response: 0.62, dampingFraction: 0.42),
-                        bulgeAmount: 1,
-                        content: .easeOut(duration: 0.2),
-                        contentDelay: 0.15,
-                        hiddenBlur: 5,
-                        hiddenScaleX: 0.97,
-                        hiddenScaleY: 0.97)
+            // The edge still lags the size change, just by much less than it takes to notice as bounce.
+            NotchMotion(size: .spring(response: 0.28, dampingFraction: 0.88),
+                        bulge: .spring(response: 0.34, dampingFraction: 0.74),
+                        bulgeAmount: 0.42,
+                        content: .easeOut(duration: 0.13),
+                        contentDelay: 0.06,
+                        hiddenBlur: 2.5,
+                        hiddenScaleX: 0.994,
+                        hiddenScaleY: 0.994)
 
         case .snap:
-            NotchMotion(size: .spring(response: 0.24, dampingFraction: 0.92),
-                        content: .easeOut(duration: 0.1),
-                        contentDelay: 0.03)
+            NotchMotion(size: .spring(response: 0.17, dampingFraction: 0.96),
+                        content: .easeOut(duration: 0.08),
+                        contentDelay: 0.015)
 
         case .unfold:
-            // Height leads, content unrolls from the top edge behind it.
-            NotchMotion(size: .timingCurve(0.2, 0.9, 0.2, 1, duration: 0.34),
-                        content: .easeOut(duration: 0.24),
-                        contentDelay: 0.1,
-                        hiddenScaleY: 0.72,
-                        hiddenOffsetY: -8)
+            NotchMotion(size: .timingCurve(0.25, 0.9, 0.25, 1, duration: 0.24),
+                        content: .easeOut(duration: 0.15),
+                        contentDelay: 0.05,
+                        hiddenScaleY: 0.94,
+                        hiddenOffsetY: -3)
 
         case .bounce:
-            NotchMotion(size: .spring(response: 0.5, dampingFraction: 0.54),
-                        content: .spring(response: 0.34, dampingFraction: 0.62),
-                        contentDelay: 0.07,
-                        hiddenScaleX: 0.88,
-                        hiddenScaleY: 0.88)
+            // The springiest of the set, which still means a single small overshoot.
+            NotchMotion(size: .spring(response: 0.3, dampingFraction: 0.72),
+                        content: .spring(response: 0.24, dampingFraction: 0.82),
+                        contentDelay: 0.035,
+                        hiddenScaleX: 0.97,
+                        hiddenScaleY: 0.97)
 
         case .none:
             NotchMotion()

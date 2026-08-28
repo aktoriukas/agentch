@@ -16,10 +16,10 @@ struct NotchShape: Shape {
 
     func path(in rect: CGRect) -> Path {
         // Rounder while it is moving; the corners tighten as the shape settles.
-        let r = min(cornerRadius + bulge * 5, rect.height / 2, rect.width / 2)
-        let sag = bulge * min(18, rect.height * 0.35)
+        let r = min(cornerRadius + bulge * 2, rect.height / 2, rect.width / 2)
+        let sag = bulge * min(9, rect.height * 0.2)
         // Pinched at the top mid-transition, as though the panel is being drawn out of the notch.
-        let pinch = bulge * min(16, rect.width * 0.06)
+        let pinch = bulge * min(7, rect.width * 0.03)
 
         var path = Path()
         path.move(to: CGPoint(x: rect.minX + pinch, y: rect.minY))
