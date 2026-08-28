@@ -6,8 +6,16 @@ import AgentchCore
 @Observable
 final class AppState {
     /// One scan per provider, replaced wholesale on each refresh.
-    var scans: [Provider: ProviderScan] = [:]
-    var parity: TokenParity = .all
+    var scans: [Provider: ProviderScan] = [:] {
+        didSet { burn.record(limits) }
+    }
+    var parity: TokenParity = TokenParity(rawValue: UserDefaults.standard.string(forKey: "tokenParity") ?? "") ?? .all
+    /// Set by the app delegate; the panel's gear button calls it.
+    var showMenu: (() -> Void)?
+    private var burn = BurnTracker()
+
+    /// The limit window closest to running out before it resets, if any is on track to.
+    var urgentProjection: (LimitWindow, Date)? { burn.mostUrgent(among: limits) }
 
     var sessions: [AgentSession] { Provider.allCases.flatMap { scans[$0]?.sessions ?? [] } }
     var limits: [LimitWindow] { Provider.allCases.flatMap { scans[$0]?.limits ?? [] } }
@@ -54,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var isRefreshing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        state.showMenu = { [weak self] in self?.showMenu() }
         rebuildControllers()
         startRefreshing()
 
@@ -116,6 +125,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private static func currentPointer(_ delegate: AppDelegate) {
         let point = NSEvent.mouseLocation
         for controller in delegate.controllers { controller.pointerMoved(to: point) }
+    }
+
+    private func showMenu() {
+        AppMenu.show(state: state,
+                     enabledDisplays: Set(enabledScreens().map(\.displayID)),
+                     at: NSEvent.mouseLocation,
+                     toggleDisplay: { [weak self] id in self?.toggleDisplay(id) },
+                     refresh: { [weak self] in Task { @MainActor in await self?.refresh() } })
+    }
+
+    private func toggleDisplay(_ id: CGDirectDisplayID) {
+        var enabled = Set(enabledScreens().map(\.displayID))
+        if enabled.contains(id) { enabled.remove(id) } else { enabled.insert(id) }
+        UserDefaults.standard.set(enabled.map { NSNumber(value: $0) }, forKey: "enabledDisplays")
+        rebuildControllers()
     }
 
     /// Default: the main display plus a notched built-in, so the notch and pill paths both show up.
@@ -198,6 +222,21 @@ struct AgentchMain {
         if CommandLine.arguments.contains("--render") {
             DevRender.writeStagePNGs()
             exit(0)
+        }
+        if let index = CommandLine.arguments.firstIndex(of: "--hooks") {
+            let verb = CommandLine.arguments.count > index + 1 ? CommandLine.arguments[index + 1] : "status"
+            do {
+                switch verb {
+                case "install": try ClaudeHooks.install()
+                case "uninstall": try ClaudeHooks.uninstall()
+                default: break
+                }
+                print("hooks installed: \(ClaudeHooks.isInstalled())")
+                exit(0)
+            } catch {
+                print("hooks \(verb) failed: \(error)")
+                exit(1)
+            }
         }
         if CommandLine.arguments.contains("--dump") {
             let semaphore = DispatchSemaphore(value: 0)

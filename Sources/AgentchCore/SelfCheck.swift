@@ -165,6 +165,37 @@ public enum SelfCheck {
         expect(ClaudeUsageClient.date(1_787_920_611.0) != nil, "epoch seconds parse")
         expect(ClaudeUsageClient.date("not a date") == nil, "garbage stays nil")
 
+        // Burn rate: 10% consumed over 30 minutes is 20%/hour, so the remaining 70% takes 3.5h.
+        var burn = BurnTracker()
+        let start = now.addingTimeInterval(-1_800)
+        func window(_ fraction: Double, resets: TimeInterval) -> LimitWindow {
+            LimitWindow(provider: .claude, kind: .session5h, fractionUsed: fraction,
+                        resetsAt: now.addingTimeInterval(resets), source: .server, fetchedAt: now)
+        }
+        burn.record([window(0.20, resets: 5 * 3_600)], now: start)
+        burn.record([window(0.30, resets: 5 * 3_600)], now: now)
+        let rate = burn.ratePerHour(for: window(0.30, resets: 5 * 3_600), now: now)
+        expect(rate != nil && abs(rate! - 0.2) < 0.001, "rate is fraction per hour")
+        let eta = burn.projectedExhaustion(for: window(0.30, resets: 5 * 3_600), now: now)
+        expect(eta != nil && abs(eta!.timeIntervalSince(now) - 3.5 * 3_600) < 60, "projection lands at 3.5h")
+
+        // No projection when the window resets first — that is the useful distinction.
+        expect(burn.projectedExhaustion(for: window(0.30, resets: 600), now: now) == nil,
+               "no projection when the reset arrives first")
+
+        // Too little history to project from.
+        var fresh = BurnTracker()
+        fresh.record([window(0.10, resets: 5 * 3_600)], now: now)
+        expect(fresh.ratePerHour(for: window(0.10, resets: 5 * 3_600), now: now) == nil,
+               "a single sample yields no rate")
+
+        // A window that reset drops backwards; history from the old period must be discarded.
+        var reset = BurnTracker()
+        reset.record([window(0.80, resets: 5 * 3_600)], now: start)
+        reset.record([window(0.02, resets: 5 * 3_600)], now: now)
+        expect(reset.ratePerHour(for: window(0.02, resets: 5 * 3_600), now: now) == nil,
+               "a reset clears stale history instead of reporting a negative rate")
+
         if failures.isEmpty {
             print("selfcheck: ok")
             return true

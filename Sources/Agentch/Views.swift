@@ -308,6 +308,12 @@ struct PanelView: View {
                         .foregroundStyle(.orange)
                 }
             }
+            Button { state.showMenu?() } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.white.opacity(0.5))
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -328,6 +334,11 @@ struct PanelView: View {
             Text("\(visibleSessions.count) sessions")
                 .font(.system(size: 10))
                 .foregroundStyle(.white.opacity(0.45))
+            if let (limit, eta) = state.urgentProjection {
+                Text("· \(limit.provider.displayName) \(limit.kind.label) full in \(Format.countdown(to: eta))")
+                    .font(.system(size: 10))
+                    .foregroundStyle(LimitTier(fractionUsed: limit.fractionUsed).color.opacity(0.9))
+            }
             Spacer()
             Text("today ≈ \(Format.usd(state.todayEstCost)) est.")
                 .font(.system(size: 10))

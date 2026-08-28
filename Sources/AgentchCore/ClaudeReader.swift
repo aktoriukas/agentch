@@ -41,6 +41,8 @@ public actor ClaudeMonitor {
     private var cursors: [URL: Cursor] = [:]
     /// Version of the Claude Code build on this machine, for the usage endpoint's user agent.
     public private(set) var clientVersion: String?
+    /// Sessions that raised a hook notification and have not finished a turn since.
+    private var awaitingUser: Set<String> = []
 
     private static let feedWindow: TimeInterval = 24 * 3_600
     private static let workingWindow: TimeInterval = 60
@@ -50,6 +52,15 @@ public actor ClaudeMonitor {
     }
 
     public func scan(pricing: PricingTable, now: Date = Date()) -> ProviderScan {
+        // Hook events are consumed once, so the flag is kept here rather than re-derived.
+        for event in ClaudeHooks.drain() {
+            if event.name == ClaudeHooks.raiseEvent {
+                awaitingUser.insert(event.sessionId)
+            } else {
+                awaitingUser.remove(event.sessionId)
+            }
+        }
+
         let registry = liveRegistry()
         var subagentTokens: [String: [String: TokenTotals]] = [:]
         var mainFiles: [(url: URL, sessionId: String, modified: Date)] = []
@@ -88,6 +99,17 @@ public actor ClaudeMonitor {
             let age = now.timeIntervalSince(file.modified)
             let window = pricing.contextWindow(provider: .claude, model: cursor.model)
 
+            let state: SessionState = if live == nil {
+                .done
+            } else if awaitingUser.contains(file.sessionId) {
+                .needsAttention
+            } else if age < Self.workingWindow {
+                .working
+            } else {
+                .idle
+            }
+            if live == nil { awaitingUser.remove(file.sessionId) }
+
             scan.sessions.append(AgentSession(
                 id: file.sessionId,
                 provider: .claude,
@@ -100,7 +122,7 @@ public actor ClaudeMonitor {
                 gitBranch: cursor.gitBranch == "HEAD" ? nil : cursor.gitBranch,
                 model: cursor.model,
                 // The registry is the authority on whether the session still exists.
-                state: live == nil ? .done : (age < Self.workingWindow ? .working : .idle),
+                state: state,
                 activity: live == nil ? nil : currentTask(sessionId: file.sessionId),
                 tokens: total,
                 estCostUSD: cost,

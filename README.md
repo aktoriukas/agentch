@@ -3,9 +3,9 @@
 A macOS notch app that tracks your AI coding agents. Hover the notch to see what Claude Code and
 Codex are working on right now, what they have spent, and how close you are to your limits.
 
-Status: **M1 — Codex live**. The notch/pill windows and the three interaction stages work, and
-Codex sessions, tokens, estimated cost and both rate-limit windows come from real local data.
-Claude lands in M2.
+Status: **working on real data for both providers.** Sessions, token spend, estimated cost and
+rate limits are live for Claude Code and Codex, along with burn-rate projection and opt-in
+"waiting on you" detection. Remaining: packaging and release (see [PLAN.md](PLAN.md)).
 See [PLAN.md](PLAN.md) for the roadmap and [RESEARCH.md](RESEARCH.md) for how the integrations work.
 
 ## Running it
@@ -22,7 +22,17 @@ a notched built-in.
   worst limit window fills, and an orange dot when a session is waiting on you.
 - **hover** — limit bars per provider with reset countdowns, plus any attention alerts.
 - **click** — the full panel: combined session feed (filterable per provider), per-session model,
-  context use, tokens and estimated cost.
+  context use, tokens and estimated cost, and how long until a limit window fills at the current
+  burn rate.
+
+The gear in the panel holds the settings: which displays to appear on, whether to count cache
+tokens, launch at login, and whether to detect sessions waiting on you.
+
+### Detecting sessions that are waiting on you
+
+Off by default. Enabling it adds two hooks (`Notification` and `Stop`) to `~/.claude/settings.json`
+that append events to a file agentch watches; turning it off removes exactly those entries. The
+file is backed up to `settings.json.agentch-backup` before either edit.
 
 ## Development
 
