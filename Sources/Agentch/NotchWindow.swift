@@ -30,8 +30,6 @@ final class NotchViewModel {
     private(set) var stage: NotchStage = .closed
     /// How far the panel's bottom edge sags mid-transition, 0...1. Drives the liquid feel.
     private(set) var bulge: CGFloat = 0
-    /// Content is held back until the shape has finished travelling.
-    private(set) var contentVisible = true
 
     let closedSize: CGSize
     let isRealNotch: Bool
@@ -42,32 +40,25 @@ final class NotchViewModel {
         self.isRealNotch = isRealNotch
     }
 
-    /// The shape settles first and the content arrives after, so the panel reads as filling up
-    /// rather than popping into place. Exactly how is the user's choice.
+    /// Moves the frame. The content reveals itself once the new stage renders, so this only has
+    /// to get the shape there.
     func setStage(_ new: NotchStage, motion: NotchMotion) {
         guard new != stage else { return }
 
         guard !motion.isInstant else {
             bulge = 0
-            contentVisible = true
             stage = new
             onStageChange?(new)
             return
         }
 
-        let opening = new != .closed
-        contentVisible = false
         // Closing deforms less; it is a retreat, not a pour.
-        bulge = motion.bulgeAmount * (opening ? 1 : 0.55)
-
+        bulge = motion.bulgeAmount * (new == .closed ? 0.55 : 1)
         withAnimation(motion.size) { stage = new }
         if motion.bulgeAmount > 0 {
             withAnimation(motion.bulge?.delay(0.02)) { bulge = 0 }
         } else {
             bulge = 0
-        }
-        withAnimation(motion.content?.delay(opening ? motion.contentDelay : 0)) {
-            contentVisible = true
         }
         onStageChange?(new)
     }

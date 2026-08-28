@@ -95,13 +95,6 @@ struct NotchRootView: View {
     var body: some View {
         VStack(spacing: 0) {
             content
-                // Content arrives the way the chosen style says it should.
-                .opacity(vm.contentVisible ? 1 : motion.hiddenOpacity)
-                .blur(radius: vm.contentVisible ? 0 : motion.hiddenBlur)
-                .scaleEffect(x: vm.contentVisible ? 1 : motion.hiddenScaleX,
-                             y: vm.contentVisible ? 1 : motion.hiddenScaleY,
-                             anchor: .top)
-                .offset(y: vm.contentVisible ? 0 : motion.hiddenOffsetY)
                 .frame(width: size.width, height: size.height)
                 .background(NotchShape(bulge: vm.bulge).fill(.black))
                 .clipShape(NotchShape(bulge: vm.bulge))
@@ -118,10 +111,10 @@ struct NotchRootView: View {
         case .closed:
             ClosedView(vm: vm, state: state)
         case .peek:
-            PeekView(state: state, topInset: vm.closedSize.height,
+            PeekView(state: state, topInset: vm.closedSize.height, animates: !motion.isInstant,
                      expand: { vm.setStage(.open, motion: motion) })
         case .open:
-            PanelView(state: state, topInset: vm.closedSize.height,
+            PanelView(state: state, topInset: vm.closedSize.height, animates: !motion.isInstant,
                       collapse: { vm.setStage(.peek, motion: motion) })
         }
     }
@@ -173,6 +166,7 @@ struct ClosedView: View {
 struct PeekView: View {
     var state: AppState
     var topInset: CGFloat = 24
+    var animates = true
     var expand: () -> Void
 
     private var sessions: [AgentSession] { state.activeSessions }
@@ -180,23 +174,26 @@ struct PeekView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header
+            header.staggered(row: 0, enabled: animates)
             if sessions.isEmpty {
                 Text("No active sessions")
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: NotchViewModel.peekRowHeight)
+                    .staggered(row: 1, enabled: animates)
             }
-            ForEach(shown) { session in
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, session in
                 CompactSessionRow(session: session, fields: state.hoverFields, parity: state.parity)
                     .frame(height: NotchViewModel.peekRowHeight)
+                    .staggered(row: index + 1, enabled: animates)
             }
             if sessions.count > NotchViewModel.peekRowLimit {
                 Text("+\(sessions.count - NotchViewModel.peekRowLimit) more")
                     .font(.system(size: 9))
                     .foregroundStyle(.white.opacity(0.35))
                     .frame(height: 16)
+                    .staggered(row: shown.count + 1, enabled: animates)
             }
         }
         .padding(.horizontal, 14)
@@ -303,6 +300,7 @@ struct IconButton: View {
 struct PanelView: View {
     var state: AppState
     var topInset: CGFloat = 24
+    var animates = true
     var collapse: () -> Void
     @State private var filter: Provider?
 
@@ -313,18 +311,21 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header
-            limitsRow
+            header.staggered(row: 0, enabled: animates)
+            limitsRow.staggered(row: 1, enabled: animates)
             Divider().overlay(.white.opacity(0.1))
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(visibleSessions) { session in
-                        SessionRow(session: session, parity: state.parity)
-                        Divider().overlay(.white.opacity(0.06))
+                    ForEach(Array(visibleSessions.enumerated()), id: \.element.id) { index, session in
+                        VStack(spacing: 0) {
+                            SessionRow(session: session, parity: state.parity)
+                            Divider().overlay(.white.opacity(0.06))
+                        }
+                        .staggered(row: index + 2, enabled: animates)
                     }
                 }
             }
-            footer
+            footer.staggered(row: visibleSessions.count + 2, enabled: animates)
         }
         .padding(.horizontal, 16)
         .padding(.top, topInset + 6)

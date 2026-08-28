@@ -40,20 +40,14 @@ enum DevRender {
         }
     }
 
-    /// Roughly halfway through opening: the shape still deformed, the content still arriving.
+    /// The frame partway through opening. Only the frame differs per style now — the content
+    /// reveal is shared — so that is all this compares.
     private static func midTransition(_ style: NotchAnimation, state: AppState, vm: NotchViewModel) -> some View {
-        let motion = style.motion
-        let progress = 0.45
-        func blend(_ hidden: CGFloat) -> CGFloat { hidden + (1 - hidden) * progress }
-
-        return PeekView(state: state, topInset: vm.closedSize.height, expand: {})
-            .opacity(motion.hiddenOpacity + (1 - motion.hiddenOpacity) * progress)
-            .blur(radius: motion.hiddenBlur * (1 - progress))
-            .scaleEffect(x: blend(motion.hiddenScaleX), y: blend(motion.hiddenScaleY), anchor: .top)
-            .offset(y: motion.hiddenOffsetY * (1 - progress))
+        let bulge = style.motion.bulgeAmount * 0.7
+        return PeekView(state: state, topInset: vm.closedSize.height, animates: false, expand: {})
             .frame(width: 470, height: vm.peekSize(sessionCount: state.activeSessions.count).height)
-            .background(NotchShape(bulge: motion.bulgeAmount * 0.7).fill(.black))
-            .clipShape(NotchShape(bulge: motion.bulgeAmount * 0.7))
+            .background(NotchShape(bulge: bulge).fill(.black))
+            .clipShape(NotchShape(bulge: bulge))
             .padding(16)
             .background(Color(white: 0.28))
             .overlay(alignment: .bottom) {

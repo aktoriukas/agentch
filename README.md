@@ -30,9 +30,11 @@ The gear — in the hover as well as the panel — holds the settings: which dis
 which per-session details the hover carries, how the panel animates when it opens, whether to
 count cache tokens, launch at login, and whether to detect sessions waiting on you.
 
-Five opening animations are available: **Liquid** (the default — the panel pinches at the top and
-its bottom edge sags as it pours out of the notch), **Snap** (quick and crisp), **Unfold** (unrolls
-downwards like a drawer), **Bounce** (overshoots and settles), and **No animation**.
+Opening happens in two layers. The **frame** is what the setting chooses between: **Liquid** (the
+default — the panel pinches at the top and its bottom edge sags as it travels), **Snap** (quick and
+crisp), **Unfold** (a flat eased slide), **Bounce** (one small overshoot), or **No animation**. The
+**content** then settles in line by line, the same way whichever frame style is picked, and is
+skipped entirely when animation is off.
 
 ### Detecting sessions that are waiting on you
 
