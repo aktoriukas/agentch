@@ -39,6 +39,8 @@ public actor ClaudeMonitor {
 
     private let home: URL
     private var cursors: [URL: Cursor] = [:]
+    /// Version of the Claude Code build on this machine, for the usage endpoint's user agent.
+    public private(set) var clientVersion: String?
 
     private static let feedWindow: TimeInterval = 24 * 3_600
     private static let workingWindow: TimeInterval = 60
@@ -145,6 +147,7 @@ public actor ClaudeMonitor {
             else { continue }
             // Registry files outlive their process; kill(0) is the cheap liveness probe.
             guard kill(pid, 0) == 0 || errno == EPERM else { continue }
+            clientVersion = object["version"] as? String ?? clientVersion
             live[sessionId] = ClaudeRegistryEntry(pid: pid,
                                                   sessionId: sessionId,
                                                   cwd: object["cwd"] as? String,

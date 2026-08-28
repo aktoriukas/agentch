@@ -42,13 +42,22 @@ enum DevRender {
 
         let codex = await CodexMonitor().scan(pricing: pricing, limit: 12)
         report("codex", codex)
-        let claude = await ClaudeMonitor().scan(pricing: pricing)
+        let monitor = ClaudeMonitor()
+        var claude = await monitor.scan(pricing: pricing)
+        let usage = ClaudeUsageClient()
+        await usage.setClientVersion(await monitor.clientVersion)
+        switch await usage.limits(force: true) {
+        case .limits(let windows): claude.limits = windows
+        case .noWindows: claude.notice = "account publishes no usage windows"
+        case .needsAuth: claude.notice = "needs sign-in"
+        case .unavailable: claude.notice = "unavailable"
+        }
         report("claude", claude)
     }
 
     private nonisolated static func report(_ label: String, _ scan: ProviderScan) {
         print("\n== \(label) limits ==")
-        if scan.limits.isEmpty { print("  (none)") }
+        if scan.limits.isEmpty { print("  (none) \(scan.notice.map { "— \($0)" } ?? "")") }
         for limit in scan.limits {
             let reset = limit.resetsAt.map { Format.countdown(to: $0) } ?? "?"
             print("  \(limit.kind.label): \(Format.percent(limit.fractionUsed)) used, resets in \(reset) [\(limit.source)]")

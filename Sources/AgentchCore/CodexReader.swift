@@ -29,10 +29,13 @@ public struct CodexRateLimits: Sendable, Equatable {
 public struct ProviderScan: Sendable {
     public var sessions: [AgentSession]
     public var limits: [LimitWindow]
+    /// Shown when limits are missing, explaining why rather than leaving a blank space.
+    public var notice: String?
 
-    public init(sessions: [AgentSession] = [], limits: [LimitWindow] = []) {
+    public init(sessions: [AgentSession] = [], limits: [LimitWindow] = [], notice: String? = nil) {
         self.sessions = sessions
         self.limits = limits
+        self.notice = notice
     }
 }
 

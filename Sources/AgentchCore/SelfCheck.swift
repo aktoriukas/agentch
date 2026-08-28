@@ -127,6 +127,44 @@ public enum SelfCheck {
 
         expect(ClaudeMonitor.firstLine("Ship it\nlater") == "Ship it", "claude title takes first line")
 
+        // Real shape of the Claude usage payload: both formats present, microsecond timestamps,
+        // and unreleased windows sitting at null.
+        let usagePayload: [String: Any] = [
+            "five_hour": ["utilization": 34.0, "resets_at": "2026-08-28T12:40:00.057413+00:00"],
+            "seven_day": ["utilization": 54.0, "resets_at": "2026-08-29T01:00:00.057439+00:00"],
+            "seven_day_opus": NSNull(),
+            "limits": [
+                ["kind": "session", "percent": 34, "resets_at": "2026-08-28T12:40:00.057413+00:00"],
+                ["kind": "weekly_all", "percent": 54, "resets_at": "2026-08-29T01:00:00.057439+00:00"],
+                ["kind": "weekly_scoped", "percent": 28, "resets_at": "2026-08-29T01:00:00.057764+00:00",
+                 "scope": ["model": ["display_name": "Fable"]]],
+            ],
+        ]
+        let parsedLimits = ClaudeUsageClient.parse(usagePayload, fetchedAt: now)
+        expect(parsedLimits.count == 3, "array shape wins so windows are not double counted")
+        expect(parsedLimits.first?.kind == .session5h, "session maps to the five-hour window")
+        expect(abs((parsedLimits.first?.fractionUsed ?? 0) - 0.34) < 0.0001, "percent converts to fraction")
+        expect(parsedLimits.last?.kind == .modelScoped("Fable weekly"), "scoped windows keep their model name")
+        expect(parsedLimits.first?.resetsAt != nil, "microsecond timestamps parse")
+
+        // Older accounts only get the flat shape.
+        let flatOnly = ClaudeUsageClient.parse([
+            "five_hour": ["utilization": 12.0, "resets_at": "2026-08-28T12:40:00Z"],
+            "seven_day_opus": ["utilization": 5.0, "resets_at": NSNull()],
+        ], fetchedAt: now)
+        expect(flatOnly.count == 2, "flat shape is used when the array is absent")
+        expect(flatOnly.last?.kind == .modelScoped("Opus weekly"), "flat model windows are labelled")
+        expect(flatOnly.last?.resetsAt == nil, "a null reset stays nil")
+
+        // Enterprise seats return nulls rather than zeros; those must not read as 0% used.
+        let enterprise = ClaudeUsageClient.parse(["five_hour": NSNull(), "seven_day": NSNull()], fetchedAt: now)
+        expect(enterprise.isEmpty, "null windows produce no bars")
+
+        expect(ClaudeUsageClient.date("2026-08-28T12:40:00.057413+00:00") != nil, "microsecond ISO parses")
+        expect(ClaudeUsageClient.date("2026-08-28T12:40:00Z") != nil, "plain ISO parses")
+        expect(ClaudeUsageClient.date(1_787_920_611.0) != nil, "epoch seconds parse")
+        expect(ClaudeUsageClient.date("not a date") == nil, "garbage stays nil")
+
         if failures.isEmpty {
             print("selfcheck: ok")
             return true

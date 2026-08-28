@@ -26,6 +26,15 @@ final class AppState {
         scans[provider]?.limits ?? []
     }
 
+    func notice(for provider: Provider) -> String? {
+        scans[provider]?.notice
+    }
+
+    /// A provider with neither limits nor sessions has nothing to say yet.
+    func hasAnything(_ provider: Provider) -> Bool {
+        !(scans[provider]?.limits.isEmpty ?? true) || !(scans[provider]?.sessions.isEmpty ?? true)
+    }
+
     /// Sum across sessions still in the feed — not a true daily total until M2 adds day bucketing.
     var todayEstCost: Double { activeSessions.compactMap(\.estCostUSD).reduce(0, +) }
 }
@@ -38,8 +47,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var localMonitor: Any?
     private let codex = CodexMonitor()
     private let claude = ClaudeMonitor()
+    private let claudeUsage = ClaudeUsageClient()
     private var pricing = PricingTable()
     private var refreshTimer: Timer?
+    /// A refresh can block on a Keychain prompt; without this, ticks pile up behind it.
+    private var isRefreshing = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         rebuildControllers()
@@ -74,12 +86,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() async {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
         let pricing = pricing
         // Independent readers; neither should wait on the other's file I/O.
         async let codexScan = codex.scan(pricing: pricing)
         async let claudeScan = claude.scan(pricing: pricing)
         state.scans[.codex] = await codexScan
-        state.scans[.claude] = await claudeScan
+
+        var scan = await claudeScan
+        await claudeUsage.setClientVersion(await claude.clientVersion)
+        // Unlike Codex, Claude publishes no limits locally; they come from its usage endpoint,
+        // which self-throttles to one call per five minutes.
+        switch await claudeUsage.limits() {
+        case .limits(let windows):
+            scan.limits = windows
+        case .noWindows:
+            scan.notice = "This account publishes no usage windows"
+        case .needsAuth:
+            scan.notice = "Sign in with Claude Code to show limits"
+        case .unavailable:
+            scan.notice = "Limits unavailable"
+        }
+        state.scans[.claude] = scan
     }
 
     private static func currentPointer(_ delegate: AppDelegate) {

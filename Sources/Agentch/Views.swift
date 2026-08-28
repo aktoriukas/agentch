@@ -161,12 +161,17 @@ struct PeekView: View {
 
             ForEach(Provider.allCases) { provider in
                 let limits = state.limits(for: provider)
-                if !limits.isEmpty {
+                if !limits.isEmpty || state.hasAnything(provider) {
                     HStack(spacing: 8) {
                         Text(provider.displayName)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(.white.opacity(0.55))
                             .frame(width: 44, alignment: .leading)
+                        if limits.isEmpty {
+                            Text(state.notice(for: provider) ?? "No limits reported")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.white.opacity(0.4))
+                        }
                         ForEach(limits) { limit in
                             LimitBar(limit: limit)
                         }
