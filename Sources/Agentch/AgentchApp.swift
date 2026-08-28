@@ -5,9 +5,12 @@ import AgentchCore
 @MainActor
 @Observable
 final class AppState {
-    var sessions: [AgentSession] = []
-    var limits: [LimitWindow] = []
+    /// One scan per provider, replaced wholesale on each refresh.
+    var scans: [Provider: ProviderScan] = [:]
     var parity: TokenParity = .all
+
+    var sessions: [AgentSession] { Provider.allCases.flatMap { scans[$0]?.sessions ?? [] } }
+    var limits: [LimitWindow] { Provider.allCases.flatMap { scans[$0]?.limits ?? [] } }
 
     var activeSessions: [AgentSession] {
         sessions.filter { $0.state != .done }.sorted { $0.lastActivity > $1.lastActivity }
@@ -20,10 +23,11 @@ final class AppState {
     var worstLimitFraction: Double { limits.map(\.fractionUsed).max() ?? 0 }
 
     func limits(for provider: Provider) -> [LimitWindow] {
-        limits.filter { $0.provider == provider }
+        scans[provider]?.limits ?? []
     }
 
-    var todayEstCost: Double { sessions.reduce(0) { $0 + $1.estCostUSD } }
+    /// Sum across sessions still in the feed — not a true daily total until M2 adds day bucketing.
+    var todayEstCost: Double { activeSessions.compactMap(\.estCostUSD).reduce(0, +) }
 }
 
 @MainActor
@@ -32,10 +36,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controllers: [NotchController] = []
     private var globalMonitor: Any?
     private var localMonitor: Any?
+    private let codex = CodexMonitor()
+    private var pricing = PricingTable()
+    private var refreshTimer: Timer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        state.loadStubData()
         rebuildControllers()
+        startRefreshing()
 
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { _ in
             MainActor.assumeIsolated { AppDelegate.currentPointer(self) }
@@ -51,6 +58,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ) { _ in
             MainActor.assumeIsolated { self.rebuildControllers() }
         }
+    }
+
+    /// ponytail: a 5s poll, cheap because rollout summaries are cached on (size, mtime) — most
+    /// ticks are a handful of stat calls. Swap in FSEvents if the latency ever matters.
+    private func startRefreshing() {
+        Task { @MainActor in
+            pricing = await PricingLoader.load()
+            await refresh()
+        }
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
+            Task { @MainActor in await self.refresh() }
+        }
+    }
+
+    private func refresh() async {
+        let scan = await codex.scan(pricing: pricing)
+        state.scans[.codex] = scan
     }
 
     private static func currentPointer(_ delegate: AppDelegate) {
@@ -82,11 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-// ponytail: stub data until M1 (Codex) and M2 (Claude) wire the real readers.
+/// Fixed data for `--render`, so the stage PNGs stay comparable between runs.
 extension AppState {
     func loadStubData() {
         let now = Date()
-        sessions = [
+        let sessions: [AgentSession] = [
             AgentSession(id: "c1", provider: .claude, title: "Wire up the notch window",
                          cwd: "/Users/huy/Projects/personal/agentch", gitBranch: "main",
                          model: "claude-opus-5", state: .working,
@@ -111,7 +135,7 @@ extension AppState {
                          estCostUSD: 0.11, contextFraction: 0.09,
                          lastActivity: now.addingTimeInterval(-1_900)),
         ]
-        limits = [
+        let limits: [LimitWindow] = [
             LimitWindow(provider: .claude, kind: .session5h, fractionUsed: 0.62,
                         resetsAt: now.addingTimeInterval(3_600 * 2 + 840), source: .server, fetchedAt: now),
             LimitWindow(provider: .claude, kind: .weekly, fractionUsed: 0.41,
@@ -121,6 +145,10 @@ extension AppState {
             LimitWindow(provider: .codex, kind: .weekly, fractionUsed: 0.01,
                         resetsAt: now.addingTimeInterval(3_600 * 120), source: .server, fetchedAt: now),
         ]
+        for provider in Provider.allCases {
+            scans[provider] = ProviderScan(sessions: sessions.filter { $0.provider == provider },
+                                           limits: limits.filter { $0.provider == provider })
+        }
     }
 }
 
@@ -133,6 +161,16 @@ struct AgentchMain {
         }
         if CommandLine.arguments.contains("--render") {
             DevRender.writeStagePNGs()
+            exit(0)
+        }
+        if CommandLine.arguments.contains("--dump") {
+            let semaphore = DispatchSemaphore(value: 0)
+            // Detached: a plain Task would inherit MainActor and deadlock against the wait below.
+            Task.detached {
+                await DevRender.dumpScan()
+                semaphore.signal()
+            }
+            semaphore.wait()
             exit(0)
         }
         let app = NSApplication.shared

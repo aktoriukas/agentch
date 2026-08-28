@@ -373,7 +373,7 @@ struct SessionRow: View {
             }
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(Format.usd(session.estCostUSD))
+                Text(session.estCostUSD.map(Format.usd) ?? "—")
                     .font(.system(size: 11, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(.white.opacity(0.85))

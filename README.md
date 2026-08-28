@@ -3,8 +3,9 @@
 A macOS notch app that tracks your AI coding agents. Hover the notch to see what Claude Code and
 Codex are working on right now, what they have spent, and how close you are to your limits.
 
-Status: **M0 — app shell**. The notch/pill windows, the three interaction stages and the views are
-in place, running on stub data. Real provider data lands in M1 (Codex) and M2 (Claude).
+Status: **M1 — Codex live**. The notch/pill windows and the three interaction stages work, and
+Codex sessions, tokens, estimated cost and both rate-limit windows come from real local data.
+Claude lands in M2.
 See [PLAN.md](PLAN.md) for the roadmap and [RESEARCH.md](RESEARCH.md) for how the integrations work.
 
 ## Running it
@@ -28,6 +29,7 @@ a notched built-in.
 ```bash
 swift run Agentch --selfcheck   # assert-based checks for the pure logic in AgentchCore
 swift run Agentch --render      # renders each stage to /tmp/agentch-*.png
+swift run Agentch --dump        # prints what the providers currently report
 ```
 
 `--render` exists because this machine has Command Line Tools without Xcode: there are no previews,

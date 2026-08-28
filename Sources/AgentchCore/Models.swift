@@ -74,14 +74,15 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
     public var model: String?
     public var state: SessionState
     public var tokens: TokenTotals
-    public var estCostUSD: Double
+    /// nil when the model has no published price — better a dash than a wrong number.
+    public var estCostUSD: Double?
     /// Fraction of the model's context window in use, 0...1.
     public var contextFraction: Double?
     public var lastActivity: Date
 
     public init(id: String, provider: Provider, title: String, cwd: String? = nil,
                 gitBranch: String? = nil, model: String? = nil, state: SessionState,
-                tokens: TokenTotals = .init(), estCostUSD: Double = 0,
+                tokens: TokenTotals = .init(), estCostUSD: Double? = nil,
                 contextFraction: Double? = nil, lastActivity: Date) {
         self.id = id
         self.provider = provider

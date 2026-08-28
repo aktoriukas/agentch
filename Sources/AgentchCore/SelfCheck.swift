@@ -56,6 +56,52 @@ public enum SelfCheck {
         expect(offset.midX == -960, "offset screen midX")
         expect(offset.maxY == 1_380, "offset screen top edge")
 
+        // Codex reports input_tokens inclusive of the cached portion.
+        let usage: [String: Any] = ["input_tokens": 55_999_296, "cached_input_tokens": 54_606_976,
+                                    "cache_write_input_tokens": 0, "output_tokens": 153_532,
+                                    "total_tokens": 56_152_828]
+        let parsed = CodexMonitor.tokens(from: usage)
+        expect(parsed.input == 1_392_320, "codex input excludes cached")
+        expect(parsed.cacheRead == 54_606_976, "codex cache read")
+        expect(parsed.output == 153_532, "codex output")
+        expect(parsed.all == 56_152_828, "codex totals reconcile")
+
+        // Some sessions zero the breakdown but still report a total.
+        let sparse = CodexMonitor.tokens(from: ["input_tokens": 0, "output_tokens": 0, "total_tokens": 3_739])
+        expect(sparse.all == 3_739, "codex falls back to total_tokens")
+
+        let limits = CodexMonitor.rateLimits(from: [
+            "primary": ["used_percent": 5.0, "window_minutes": 300, "resets_at": 1_787_920_611.0],
+            "secondary": ["used_percent": 1.0, "window_minutes": 10_080, "resets_at": 1_788_507_411.0],
+            "plan_type": "plus",
+        ])
+        expect(limits?.primary?.usedPercent == 5.0, "codex primary window")
+        expect(limits?.primary?.windowMinutes == 300, "codex 5-hour window length")
+        expect(limits?.secondary?.windowMinutes == 10_080, "codex weekly window length")
+        expect(limits?.planType == "plus", "codex plan type")
+        expect(CodexMonitor.rateLimits(from: ["plan_type": "plus"]) == nil, "codex ignores empty snapshots")
+
+        let windows = CodexMonitor.limitWindows(limits!, fetchedAt: now)
+        expect(windows.count == 2, "codex yields both windows")
+        expect(windows.first?.fractionUsed == 0.05, "percent converts to fraction")
+
+        expect(CodexMonitor.title(from: "Fix the parser\nand then ship it") == "Fix the parser", "title takes first line")
+        expect(CodexMonitor.title(from: String(repeating: "ab ", count: 40))?.hasSuffix("…") == true, "long titles clip")
+        expect(CodexMonitor.title(from: "   ") == nil, "blank titles are dropped")
+
+        // Pricing: exact ids win, dated variants fall back to their base id, unknowns stay unpriced.
+        let table = PricingTable(models: [
+            "openai/gpt-5.6-sol": ModelPrice(input: 4, output: 20, cacheRead: 0.4, cacheWrite: 5),
+            "anthropic/claude-opus-5": ModelPrice(input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25),
+        ])
+        expect(table.price(provider: .codex, model: "gpt-5.6-sol")?.output == 20, "exact price match")
+        expect(table.price(provider: .claude, model: "claude-opus-5-20260115")?.input == 5, "dated id falls back")
+        expect(table.price(provider: .codex, model: "gpt-9-imaginary") == nil, "unknown model has no price")
+        expect(table.price(provider: .claude, model: nil) == nil, "missing model has no price")
+
+        let cost = table.price(provider: .codex, model: "gpt-5.6-sol")!.cost(parsed)
+        expect(abs(cost - 30.48) < 0.01, "codex session cost matches hand calculation")
+
         if failures.isEmpty {
             print("selfcheck: ok")
             return true

@@ -32,6 +32,29 @@ enum DevRender {
         write(rows, size: CGSize(width: 680, height: 220), name: "rows")
     }
 
+    /// Prints what the providers actually return, for checking against each vendor's own UI.
+    nonisolated static func dumpScan() async {
+        let pricing = await PricingLoader.load()
+        print("pricing: \(pricing.models.count) models, fetched \(pricing.fetchedAt)")
+
+        let catalog = CodexThreadStore.load()
+        print("codex thread catalog: \(catalog.byRolloutName.count) rows")
+
+        let scan = await CodexMonitor().scan(pricing: pricing, limit: 12)
+        print("\n== codex limits ==")
+        for limit in scan.limits {
+            let reset = limit.resetsAt.map { Format.countdown(to: $0) } ?? "?"
+            print("  \(limit.kind.label): \(Format.percent(limit.fractionUsed)) used, resets in \(reset) [\(limit.source)]")
+        }
+        print("\n== codex sessions (\(scan.sessions.count)) ==")
+        for session in scan.sessions {
+            let context = session.contextFraction.map { Format.percent($0) } ?? "—"
+            print("  [\(session.state)] \(session.title)")
+            print("      \(session.projectName ?? "?") · \(session.model ?? "?") · ctx \(context) · "
+                  + "\(Format.tokens(session.tokens.all)) tok · \(session.estCostUSD.map(Format.usd) ?? "—") est")
+        }
+    }
+
     private static func write(_ view: some View, size: CGSize, name: String) {
         let framed = view
             .frame(width: size.width, height: size.height)
