@@ -228,6 +228,10 @@ struct AgentchMain {
         if CommandLine.arguments.contains("--selfcheck") {
             exit(SelfCheck.run() ? 0 : 1)
         }
+        if CommandLine.arguments.contains("--icon") {
+            DevRender.writeIcon()
+            exit(0)
+        }
         if CommandLine.arguments.contains("--render") {
             DevRender.writeStagePNGs()
             exit(0)

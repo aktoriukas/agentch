@@ -104,11 +104,16 @@ cd agentch
 swift build -c release
 ```
 
-**5. Run it.**
+**5. Build the app bundle and install it.**
 
 ```bash
-.build/release/Agentch
+./scripts/build-app.sh --install
+open -a Agentch
 ```
+
+That produces `Agentch.app`, icon and all, and copies it to `/Applications`. Drop `--install` to
+leave it in `build/` instead. To run the bare executable without a bundle, `.build/release/Agentch`
+works too — but launch-at-login needs the bundle.
 
 Nothing appears in the Dock or the menu bar — that is deliberate, it runs as an agent app. Move
 your pointer to the notch (or to the top centre of your display, if it has no notch) and the panel
@@ -123,12 +128,7 @@ neither network nor auth — they are read straight out of its local rollout fil
 
 **7. Optional: keep it running.**
 
-Open the gear in the hover or the panel and turn on **Launch at login**. Move the binary somewhere
-stable first if you plan to delete the checkout:
-
-```bash
-cp .build/release/Agentch /usr/local/bin/agentch
-```
+Open the gear in the hover or the panel and turn on **Launch at login**.
 
 **8. Optional: turn on "waiting on you" detection.**
 
@@ -156,7 +156,12 @@ file is backed up to `settings.json.agentch-backup` before either edit.
 swift run Agentch --selfcheck   # assert-based checks for the pure logic in AgentchCore
 swift run Agentch --render      # renders each stage to /tmp/agentch-*.png
 swift run Agentch --dump        # prints what the providers currently report
+swift run Agentch --icon        # renders the app icon to /tmp/agentch-icon.png
 ```
+
+The icon is drawn in SwiftUI (`Sources/Agentch/AppIcon.swift`) rather than kept as a binary asset,
+so `scripts/build-app.sh` renders it, downsamples it into an iconset and packs the `.icns` at build
+time.
 
 `--render` exists because this machine has Command Line Tools without Xcode: there are no previews,
 and no XCTest or swift-testing either, so checks live in `AgentchCore/SelfCheck.swift`. The

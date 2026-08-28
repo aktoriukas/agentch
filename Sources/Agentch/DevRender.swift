@@ -7,6 +7,11 @@ import AgentchCore
 /// Usage: `swift run Agentch --render` → /tmp/agentch-{closed-pill,closed-notch,peek,panel}.png
 @MainActor
 enum DevRender {
+    /// The icon at full size; scripts/build-app.sh downsamples it into the iconset.
+    static func writeIcon() {
+        write(AppIcon(), size: CGSize(width: AppIcon.canvas, height: AppIcon.canvas), name: "icon")
+    }
+
     static func writeStagePNGs() {
         let state = AppState()
         state.loadStubData()
