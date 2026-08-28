@@ -20,10 +20,11 @@ a notched built-in.
 
 - **closed** — ambient only: active session count, a tint that shifts green → amber → red as your
   worst limit window fills, and an orange dot when a session is waiting on you.
-- **hover** — limit bars per provider with reset countdowns, plus any attention alerts.
-- **click** — the full panel: combined session feed (filterable per provider), per-session model,
-  context use, tokens and estimated cost, and how long until a limit window fills at the current
-  burn rate.
+- **hover** — every active session, one line each, sized to fit however many there are; plus a gear
+  for settings and a chevron to expand.
+- **click** — the full panel: limit gauges per provider with reset countdowns, the session feed
+  filterable per provider with model, branch, context use, tokens and estimated cost, and how long
+  until a limit window fills at the current burn rate.
 
 The gear — in the hover as well as the panel — holds the settings: which displays to appear on,
 which per-session details the hover carries, how the panel animates when it opens, whether to
