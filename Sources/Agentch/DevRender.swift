@@ -17,12 +17,16 @@ enum DevRender {
         write(ClosedView(vm: pill, state: state), size: pill.closedSize, name: "closed-pill")
         write(ClosedView(vm: notch, state: state), size: notch.closedSize, name: "closed-notch")
         let count = state.activeSessions.count
-        write(PeekView(state: state, topInset: pill.closedSize.height, expand: {}),
+        write(PeekView(state: state, topInset: pill.closedSize.height,
+                       notchWidth: pill.closedSize.width, expand: {}),
               size: pill.peekSize(sessionCount: count), name: "peek")
         // Worst case for the top inset: content must clear the 38pt hardware cutout.
-        write(PeekView(state: state, topInset: notch.closedSize.height, expand: {}),
+        write(PeekView(state: state, topInset: notch.closedSize.height,
+                       notchWidth: notch.closedSize.width, expand: {}),
               size: notch.peekSize(sessionCount: count), name: "peek-notch")
-        write(PanelView(state: state, collapse: {}), size: pill.openSize, name: "panel")
+        write(PanelView(state: state, topInset: notch.closedSize.height,
+                        notchWidth: notch.closedSize.width, collapse: {}),
+              size: notch.openSize, name: "panel")
 
         // ScrollView renders blank under ImageRenderer, so check the rows on their own.
         let rows = VStack(spacing: 0) {

@@ -46,30 +46,48 @@ final class NotchViewModel {
 
     // MARK: - Sizing
 
-    static let peekRowHeight: CGFloat = 27
-    static let peekHeaderHeight: CGFloat = 26
-    /// The token allocation strip, shown without expanding.
-    static let peekAllocationHeight: CGFloat = 14
+    static let peekRowHeight: CGFloat = 26
+    /// The chevron's own box. The bars around it are taller.
+    static let peekExpandHeight: CGFloat = 16
+    /// Chrome bars: text and a chevron in the peek, the chip track and a chevron in the panel.
+    static let peekBarHeight: CGFloat = 20
+    static let panelBarHeight: CGFloat = 24
     /// Beyond this the hover would cover half the screen; the rest live behind "show all".
     static let peekRowLimit = 7
 
     func peekSize(sessionCount: Int) -> CGSize {
         let rows = CGFloat(min(max(sessionCount, 1), Self.peekRowLimit))
-        let overflow: CGFloat = sessionCount > Self.peekRowLimit ? 16 : 0
+        let overflow: CGFloat = sessionCount > Self.peekRowLimit ? 18 : 0
         let width: CGFloat = max(closedSize.width + 300, 470)
         let listHeight: CGFloat = rows * Self.peekRowHeight
-        let chrome: CGFloat = closedSize.height + Self.peekHeaderHeight
-            + Self.peekAllocationHeight + 22
+        // The flank band fills the cutout's height, then 6 + list + bar + 8 bottom.
+        let chrome: CGFloat = closedSize.height + 6 + Self.peekBarHeight + 8
         return CGSize(width: width, height: chrome + listHeight + overflow)
     }
 
-    var openSize: CGSize { CGSize(width: 700, height: 470) }
+    static let panelRowHeight: CGFloat = 36
+    /// Past this the panel is taller than it is useful; the rest scroll.
+    static let panelRowLimit = 8
+
+    /// The panel sizes to its list the way the peek does, so it is not half empty at two sessions.
+    /// ponytail: the limits band is budgeted at two windows per provider — a third scrolls the
+    /// list rather than growing the window.
+    func openSize(sessionCount: Int) -> CGSize {
+        let rows = CGFloat(min(max(sessionCount, 1), Self.panelRowLimit))
+        // flank + 12 + limits band + 16 + list + 12 fade + 8 + footer + bar + 12 bottom.
+        let chrome: CGFloat = closedSize.height + 12 + 71 + 16 + 12 + 8 + 18
+            + Self.panelBarHeight + 12
+        return CGSize(width: 700, height: min(470, chrome + rows * Self.panelRowHeight))
+    }
+
+    /// The largest the panel can get: what the window itself has to reserve.
+    var openSize: CGSize { openSize(sessionCount: Self.panelRowLimit) }
 
     func size(for stage: NotchStage, sessionCount: Int) -> CGSize {
         switch stage {
         case .closed: closedSize
         case .peek: peekSize(sessionCount: sessionCount)
-        case .open: openSize
+        case .open: openSize(sessionCount: sessionCount)
         }
     }
 }

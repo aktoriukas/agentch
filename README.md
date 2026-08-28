@@ -3,9 +3,9 @@
 A macOS notch app that tracks your AI coding agents. Hover the notch to see what Claude Code and
 Codex are working on right now, what they have spent, and how close you are to your limits.
 
-Status: **working on real data for both providers.** Sessions, token spend, estimated cost and
-rate limits are live for Claude Code and Codex, along with burn-rate projection and opt-in
-"waiting on you" detection. Remaining: packaging and release (see [PLAN.md](PLAN.md)).
+Status: **v1.** Sessions, token spend, estimated cost and rate limits are live for Claude Code and
+Codex, along with burn-rate projection and opt-in "waiting on you" detection. Built from source —
+there is no signed build yet.
 See [PLAN.md](PLAN.md) for the roadmap and [RESEARCH.md](RESEARCH.md) for how the integrations work.
 
 ## Running it
@@ -18,14 +18,15 @@ It runs as a menu-bar-less agent app: a panel appears over the notch on a notche
 small pill at the top centre of displays without one. By default it shows on your main display plus
 a notched built-in.
 
-- **closed** — ambient only: active session count, a tint that shifts green → amber → red as your
-  worst limit window fills, and an orange dot when a session is waiting on you.
-- **hover** — every active session, one line each, sized to fit however many there are, above a
-  compact bar showing how the token spend is split between them; plus a gear for settings and a
-  chevron to expand. Clicking a session reopens it in the app that owns it.
-- **click** — the full panel: limit gauges per provider with reset countdowns, the session feed
-  filterable per provider with model, branch, context use, tokens and estimated cost, and how long
-  until a limit window fills at the current burn rate.
+- **closed** — ambient only: a bar across the width of the notch, one segment per provider, filled
+  with what is left of its nearest limit; the whole thing glows amber when a session is waiting
+  on you.
+- **hover** — a progress ring per provider parked either side of the cutout, then every active
+  session one line each, sized to fit however many there are. Clicking a session reopens it in the
+  app that owns it. The count, the chevron and the gear share a bar along the bottom.
+- **click** — the full panel: the same rings in the same place, every limit window per provider
+  with reset countdowns, and the session feed filterable per provider with model, branch, context
+  use, tokens and estimated cost, plus how long until a window fills at the current burn rate.
 
 Every stage change is instant — the panel and its content are simply there, with no animation to
 sit through.

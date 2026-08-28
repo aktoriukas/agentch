@@ -38,8 +38,12 @@ final class SettingsWindowController {
                               backing: .buffered,
                               defer: false)
         window.title = "agentch"
-        window.contentView = NSHostingView(rootView: view)
+        let hosting = NSHostingView(rootView: view)
+        window.contentView = hosting
         window.isReleasedWhenClosed = false
+        // Sized to what it actually holds: the model list grows as models are discovered, so any
+        // fixed height opens either scrolled or half empty.
+        window.setContentSize(NSSize(width: 460, height: min(hosting.fittingSize.height, 700)))
         window.center()
         window.makeKeyAndOrderFront(nil)
         // An accessory app has no windows of its own by default; this one needs focus to be usable.
@@ -71,7 +75,7 @@ struct SettingsView: View {
     /// Separate from `body` so it can be rendered offscreen; a ScrollView draws blank there.
     @ViewBuilder
     var content: some View {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 16) {
                 section("Displays") {
                     ForEach(NSScreen.screens, id: \.displayID) { screen in
                         Toggle(isOn: Binding(
@@ -101,7 +105,7 @@ struct SettingsView: View {
                 section("Model colours") {
                     if state.knownModels.isEmpty {
                         Text("Models appear here once a session has used one.")
-                            .font(.caption)
+                            .font(.system(size: 10))
                             .foregroundStyle(.secondary)
                     }
                     ForEach(state.knownModels, id: \.self) { model in
@@ -138,7 +142,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Count cache tokens")
                             Text("On matches ccusage totals; off matches what the web apps show.")
-                                .font(.caption)
+                                .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -155,7 +159,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Show when a session is waiting on you")
                             Text("Adds two hooks to ~/.claude/settings.json, backed up first.")
-                                .font(.caption)
+                                .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
                         }
                     }
@@ -179,14 +183,16 @@ struct SettingsView: View {
                     .padding(.top, 4)
                 }
             }
-            .padding(20)
+            .font(.system(size: 11))
+            .padding(16)
     }
 
     private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             Text(title.uppercased())
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(0.5)
+                .foregroundStyle(.tertiary)
             content()
         }
     }
@@ -200,7 +206,7 @@ struct ColorRow: View {
     var set: (String?) -> Void
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             ColorPicker("", selection: Binding(
                 get: { Color(hex: hex) },
                 set: { set($0.hexString) }
@@ -208,18 +214,19 @@ struct ColorRow: View {
             .labelsHidden()
 
             Text(label)
-                .font(.system(size: 12))
+                .font(.system(size: 11))
                 .lineLimit(1)
+                .truncationMode(.middle)
 
             Spacer()
 
             if isCustom {
                 Button("Reset") { set(nil) }
                     .buttonStyle(.link)
-                    .font(.caption)
+                    .font(.system(size: 10))
             } else {
                 Text("auto")
-                    .font(.caption)
+                    .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
             }
         }

@@ -18,11 +18,13 @@ public struct Appearance: Codable, Sendable, Equatable {
         Provider.codex.rawValue: "#10A37F",
     ]
 
-    /// Assigned to models nobody has picked a colour for. Distinct hues that survive a dark
-    /// background.
+    /// Assigned to models nobody has picked a colour for. Eight that differ beats ten that collide:
+    /// at least 35° apart, none inside the 20–50° wedge the warn/attention accents already own, and
+    /// all in one mid-luminance band — a model is identity, never rank, so no swatch may outshine a
+    /// row title.
     public static let palette = [
-        "#7AA2F7", "#BB9AF7", "#7DCFFF", "#9ECE6A", "#E0AF68",
-        "#F7768E", "#2AC3DE", "#B4F9F8", "#C0CAF5", "#FF9E64",
+        "#6B8FD6", "#59A8CE", "#4FB09A", "#86AE58",
+        "#C77BC0", "#A184D6", "#D66A7E", "#9AA0AC",
     ]
 
     public func color(for provider: Provider) -> String {
@@ -37,6 +39,11 @@ public struct Appearance: Codable, Sendable, Equatable {
         if let chosen = models[model] { return chosen }
         var hash: UInt64 = 5_381
         for byte in model.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
+        // 33 ≡ 1 mod 8, so djb2's low bits are just a byte sum: every "claude-*-5" landed on one
+        // colour. Finalise before taking the remainder.
+        hash ^= hash >> 33
+        hash = hash &* 0xff51_afd7_ed55_8ccd
+        hash ^= hash >> 33
         return Self.palette[Int(hash % UInt64(Self.palette.count))]
     }
 
