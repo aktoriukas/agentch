@@ -150,9 +150,6 @@ file is backed up to `settings.json.agentch-backup` before either edit.
   transcripts with per-message token usage for cost. Subscription limits come from Anthropic's
   OAuth usage endpoint, falling back to a labelled local estimate when it is unavailable.
 
-See [RESEARCH.md](RESEARCH.md) for how each integration was worked out, and [PLAN.md](PLAN.md) for
-the roadmap.
-
 ## Development
 
 ```bash
