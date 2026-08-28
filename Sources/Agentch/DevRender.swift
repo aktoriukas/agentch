@@ -40,18 +40,28 @@ enum DevRender {
         let catalog = CodexThreadStore.load()
         print("codex thread catalog: \(catalog.byRolloutName.count) rows")
 
-        let scan = await CodexMonitor().scan(pricing: pricing, limit: 12)
-        print("\n== codex limits ==")
+        let codex = await CodexMonitor().scan(pricing: pricing, limit: 12)
+        report("codex", codex)
+        let claude = await ClaudeMonitor().scan(pricing: pricing)
+        report("claude", claude)
+    }
+
+    private nonisolated static func report(_ label: String, _ scan: ProviderScan) {
+        print("\n== \(label) limits ==")
+        if scan.limits.isEmpty { print("  (none)") }
         for limit in scan.limits {
             let reset = limit.resetsAt.map { Format.countdown(to: $0) } ?? "?"
             print("  \(limit.kind.label): \(Format.percent(limit.fractionUsed)) used, resets in \(reset) [\(limit.source)]")
         }
-        print("\n== codex sessions (\(scan.sessions.count)) ==")
-        for session in scan.sessions {
+        print("\n== \(label) sessions (\(scan.sessions.count)) ==")
+        for session in scan.sessions.sorted(by: { $0.lastActivity > $1.lastActivity }) {
             let context = session.contextFraction.map { Format.percent($0) } ?? "—"
             print("  [\(session.state)] \(session.title)")
             print("      \(session.projectName ?? "?") · \(session.model ?? "?") · ctx \(context) · "
                   + "\(Format.tokens(session.tokens.all)) tok · \(session.estCostUSD.map(Format.usd) ?? "—") est")
+            let t = session.tokens
+            print("      raw: in=\(t.input) out=\(t.output) cacheRead=\(t.cacheRead) "
+                  + "cacheWrite5m=\(t.cacheWrite) cacheWrite1h=\(t.cacheWrite1h) total=\(t.all)")
         }
     }
 

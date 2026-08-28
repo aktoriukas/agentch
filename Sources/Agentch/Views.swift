@@ -387,7 +387,8 @@ struct SessionRow: View {
     }
 
     private var subtitle: String {
-        [session.projectName, session.gitBranch, session.model, session.state.label]
+        // What it is doing beats what state it is in, when the session says.
+        [session.projectName, session.gitBranch, session.model, session.activity ?? session.state.label]
             .compactMap { $0 }
             .joined(separator: " · ")
     }

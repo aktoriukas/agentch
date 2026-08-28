@@ -102,6 +102,31 @@ public enum SelfCheck {
         let cost = table.price(provider: .codex, model: "gpt-5.6-sol")!.cost(parsed)
         expect(abs(cost - 30.48) < 0.01, "codex session cost matches hand calculation")
 
+        // Claude splits cache writes by lifetime; 1-hour writes bill at twice the input rate.
+        let claudeUsage: [String: Any] = [
+            "input_tokens": 2, "output_tokens": 1_366,
+            "cache_read_input_tokens": 260_862, "cache_creation_input_tokens": 384,
+            "cache_creation": ["ephemeral_1h_input_tokens": 384, "ephemeral_5m_input_tokens": 0],
+        ]
+        let claudeTokens = ClaudeMonitor.tokens(from: claudeUsage)
+        expect(claudeTokens.cacheWrite1h == 384, "1-hour cache writes are split out")
+        expect(claudeTokens.cacheWrite == 0, "5-minute bucket stays empty")
+        expect(claudeTokens.cacheRead == 260_862, "claude cache read")
+        expect(claudeTokens.all == 262_614, "claude totals reconcile")
+
+        // Without the breakdown, assume the cheaper 5-minute lifetime.
+        let legacy = ClaudeMonitor.tokens(from: ["input_tokens": 10, "cache_creation_input_tokens": 500])
+        expect(legacy.cacheWrite == 500, "missing breakdown falls back to 5-minute")
+        expect(legacy.cacheWrite1h == 0, "no 1-hour tokens invented")
+
+        let opus = ModelPrice(input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25)
+        let oneHourCost = opus.cost(TokenTotals(cacheWrite1h: 1_000_000))
+        expect(abs(oneHourCost - 10) < 0.0001, "1-hour cache writes bill at twice input")
+        let fiveMinuteCost = opus.cost(TokenTotals(cacheWrite: 1_000_000))
+        expect(abs(fiveMinuteCost - 6.25) < 0.0001, "5-minute cache writes bill at the cache rate")
+
+        expect(ClaudeMonitor.firstLine("Ship it\nlater") == "Ship it", "claude title takes first line")
+
         if failures.isEmpty {
             print("selfcheck: ok")
             return true

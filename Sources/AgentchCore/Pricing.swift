@@ -21,7 +21,9 @@ public struct ModelPrice: Sendable, Codable, Equatable {
         (Double(tokens.input) * input
             + Double(tokens.output) * output
             + Double(tokens.cacheRead) * cacheRead
-            + Double(tokens.cacheWrite) * cacheWrite) / 1_000_000
+            + Double(tokens.cacheWrite) * cacheWrite
+            // A 1-hour cache write bills at twice the input rate.
+            + Double(tokens.cacheWrite1h) * input * 2) / 1_000_000
     }
 }
 

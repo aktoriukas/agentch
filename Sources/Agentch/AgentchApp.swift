@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalMonitor: Any?
     private var localMonitor: Any?
     private let codex = CodexMonitor()
+    private let claude = ClaudeMonitor()
     private var pricing = PricingTable()
     private var refreshTimer: Timer?
 
@@ -73,8 +74,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func refresh() async {
-        let scan = await codex.scan(pricing: pricing)
-        state.scans[.codex] = scan
+        let pricing = pricing
+        // Independent readers; neither should wait on the other's file I/O.
+        async let codexScan = codex.scan(pricing: pricing)
+        async let claudeScan = claude.scan(pricing: pricing)
+        state.scans[.codex] = await codexScan
+        state.scans[.claude] = await claudeScan
     }
 
     private static func currentPointer(_ delegate: AppDelegate) {

@@ -28,17 +28,23 @@ public struct TokenTotals: Codable, Sendable, Equatable {
     public var input: Int
     public var output: Int
     public var cacheRead: Int
+    /// Cache writes with the default 5-minute lifetime.
     public var cacheWrite: Int
+    /// Cache writes with a 1-hour lifetime, which bill at twice the input rate rather than the
+    /// usual cache-write rate. Claude Code subscriptions use these heavily.
+    public var cacheWrite1h: Int
 
-    public init(input: Int = 0, output: Int = 0, cacheRead: Int = 0, cacheWrite: Int = 0) {
+    public init(input: Int = 0, output: Int = 0, cacheRead: Int = 0,
+                cacheWrite: Int = 0, cacheWrite1h: Int = 0) {
         self.input = input
         self.output = output
         self.cacheRead = cacheRead
         self.cacheWrite = cacheWrite
+        self.cacheWrite1h = cacheWrite1h
     }
 
     /// Everything the provider billed for — matches ccusage totals.
-    public var all: Int { input + output + cacheRead + cacheWrite }
+    public var all: Int { input + output + cacheRead + cacheWrite + cacheWrite1h }
 
     /// Input + output only — matches what the web UIs report.
     public var conversational: Int { input + output }
@@ -47,7 +53,8 @@ public struct TokenTotals: Codable, Sendable, Equatable {
         TokenTotals(input: a.input + b.input,
                     output: a.output + b.output,
                     cacheRead: a.cacheRead + b.cacheRead,
-                    cacheWrite: a.cacheWrite + b.cacheWrite)
+                    cacheWrite: a.cacheWrite + b.cacheWrite,
+                    cacheWrite1h: a.cacheWrite1h + b.cacheWrite1h)
     }
 
     public static func += (a: inout TokenTotals, b: TokenTotals) { a = a + b }
@@ -73,6 +80,8 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
     public var gitBranch: String?
     public var model: String?
     public var state: SessionState
+    /// What the agent is doing right now, when it publishes a task list ("Writing the parser").
+    public var activity: String?
     public var tokens: TokenTotals
     /// nil when the model has no published price — better a dash than a wrong number.
     public var estCostUSD: Double?
@@ -82,7 +91,7 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
 
     public init(id: String, provider: Provider, title: String, cwd: String? = nil,
                 gitBranch: String? = nil, model: String? = nil, state: SessionState,
-                tokens: TokenTotals = .init(), estCostUSD: Double? = nil,
+                activity: String? = nil, tokens: TokenTotals = .init(), estCostUSD: Double? = nil,
                 contextFraction: Double? = nil, lastActivity: Date) {
         self.id = id
         self.provider = provider
@@ -91,6 +100,7 @@ public struct AgentSession: Identifiable, Sendable, Equatable {
         self.gitBranch = gitBranch
         self.model = model
         self.state = state
+        self.activity = activity
         self.tokens = tokens
         self.estCostUSD = estCostUSD
         self.contextFraction = contextFraction
