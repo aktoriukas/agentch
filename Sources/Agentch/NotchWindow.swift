@@ -43,17 +43,30 @@ final class NotchViewModel {
     }
 
     /// The shape settles first and the content arrives after, so the panel reads as filling up
-    /// rather than popping into place.
-    func setStage(_ new: NotchStage) {
+    /// rather than popping into place. Exactly how is the user's choice.
+    func setStage(_ new: NotchStage, motion: NotchMotion) {
         guard new != stage else { return }
-        let opening = new != .closed
 
+        guard !motion.isInstant else {
+            bulge = 0
+            contentVisible = true
+            stage = new
+            onStageChange?(new)
+            return
+        }
+
+        let opening = new != .closed
         contentVisible = false
-        bulge = opening ? 1 : 0.55
-        withAnimation(.spring(response: 0.46, dampingFraction: 0.68)) { stage = new }
-        // Lower damping than the size change, so the edge keeps wobbling after it arrives.
-        withAnimation(.spring(response: 0.62, dampingFraction: 0.42).delay(0.02)) { bulge = 0 }
-        withAnimation(.easeOut(duration: opening ? 0.2 : 0.12).delay(opening ? 0.15 : 0)) {
+        // Closing deforms less; it is a retreat, not a pour.
+        bulge = motion.bulgeAmount * (opening ? 1 : 0.55)
+
+        withAnimation(motion.size) { stage = new }
+        if motion.bulgeAmount > 0 {
+            withAnimation(motion.bulge?.delay(0.02)) { bulge = 0 }
+        } else {
+            bulge = 0
+        }
+        withAnimation(motion.content?.delay(opening ? motion.contentDelay : 0)) {
             contentVisible = true
         }
         onStageChange?(new)
@@ -161,12 +174,12 @@ final class NotchController {
     func pointerMoved(to point: CGPoint) {
         switch vm.stage {
         case .closed:
-            if rect(for: .closed).contains(point) { vm.setStage(.peek) }
+            if rect(for: .closed).contains(point) { vm.setStage(.peek, motion: state.animation.motion) }
         case .peek:
             // While a menu is up the pointer wanders off; keep the panel open behind it.
-            if !rect(for: .peek).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
+            if !rect(for: .peek).contains(point), !state.menuIsOpen { vm.setStage(.closed, motion: state.animation.motion) }
         case .open:
-            if !rect(for: .open).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
+            if !rect(for: .open).contains(point), !state.menuIsOpen { vm.setStage(.closed, motion: state.animation.motion) }
         }
     }
 

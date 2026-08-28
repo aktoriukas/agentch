@@ -90,13 +90,18 @@ struct NotchRootView: View {
         vm.size(for: vm.stage, sessionCount: state.activeSessions.count)
     }
 
+    private var motion: NotchMotion { state.animation.motion }
+
     var body: some View {
         VStack(spacing: 0) {
             content
-                .opacity(vm.contentVisible ? 1 : 0)
-                // Content arrives slightly out of focus and settles, matching the shape's motion.
-                .blur(radius: vm.contentVisible ? 0 : 5)
-                .scaleEffect(vm.contentVisible ? 1 : 0.97, anchor: .top)
+                // Content arrives the way the chosen style says it should.
+                .opacity(vm.contentVisible ? 1 : motion.hiddenOpacity)
+                .blur(radius: vm.contentVisible ? 0 : motion.hiddenBlur)
+                .scaleEffect(x: vm.contentVisible ? 1 : motion.hiddenScaleX,
+                             y: vm.contentVisible ? 1 : motion.hiddenScaleY,
+                             anchor: .top)
+                .offset(y: vm.contentVisible ? 0 : motion.hiddenOffsetY)
                 .frame(width: size.width, height: size.height)
                 .background(NotchShape(bulge: vm.bulge).fill(.black))
                 .clipShape(NotchShape(bulge: vm.bulge))
@@ -113,9 +118,11 @@ struct NotchRootView: View {
         case .closed:
             ClosedView(vm: vm, state: state)
         case .peek:
-            PeekView(state: state, topInset: vm.closedSize.height, expand: { vm.setStage(.open) })
+            PeekView(state: state, topInset: vm.closedSize.height,
+                     expand: { vm.setStage(.open, motion: motion) })
         case .open:
-            PanelView(state: state, topInset: vm.closedSize.height, collapse: { vm.setStage(.peek) })
+            PanelView(state: state, topInset: vm.closedSize.height,
+                      collapse: { vm.setStage(.peek, motion: motion) })
         }
     }
 }

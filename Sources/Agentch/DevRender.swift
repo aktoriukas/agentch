@@ -34,15 +34,34 @@ enum DevRender {
         .padding(.horizontal, 16)
         write(rows, size: CGSize(width: 680, height: 220), name: "rows")
 
-        // Frames of the expand transition; animation cannot be previewed any other way here.
-        for (index, bulge) in [1.0, 0.6, 0.3, 0.0].enumerated() {
-            let frame = NotchShape(bulge: bulge)
-                .fill(.black)
-                .frame(width: 380, height: 120)
-                .padding(14)
-                .background(Color(white: 0.28))
-            writeRaw(frame, name: "liquid-\(index)")
+        // Each style caught mid-transition, since motion cannot be previewed any other way here.
+        for style in NotchAnimation.allCases {
+            writeRaw(midTransition(style, state: state, vm: pill), name: "style-\(style.rawValue)")
         }
+    }
+
+    /// Roughly halfway through opening: the shape still deformed, the content still arriving.
+    private static func midTransition(_ style: NotchAnimation, state: AppState, vm: NotchViewModel) -> some View {
+        let motion = style.motion
+        let progress = 0.45
+        func blend(_ hidden: CGFloat) -> CGFloat { hidden + (1 - hidden) * progress }
+
+        return PeekView(state: state, topInset: vm.closedSize.height, expand: {})
+            .opacity(motion.hiddenOpacity + (1 - motion.hiddenOpacity) * progress)
+            .blur(radius: motion.hiddenBlur * (1 - progress))
+            .scaleEffect(x: blend(motion.hiddenScaleX), y: blend(motion.hiddenScaleY), anchor: .top)
+            .offset(y: motion.hiddenOffsetY * (1 - progress))
+            .frame(width: 470, height: vm.peekSize(sessionCount: state.activeSessions.count).height)
+            .background(NotchShape(bulge: motion.bulgeAmount * 0.7).fill(.black))
+            .clipShape(NotchShape(bulge: motion.bulgeAmount * 0.7))
+            .padding(16)
+            .background(Color(white: 0.28))
+            .overlay(alignment: .bottom) {
+                Text(style.label)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.bottom, 2)
+            }
     }
 
     private static func writeRaw(_ view: some View, name: String) {

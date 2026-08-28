@@ -25,8 +25,13 @@ a notched built-in.
   context use, tokens and estimated cost, and how long until a limit window fills at the current
   burn rate.
 
-The gear in the panel holds the settings: which displays to appear on, whether to count cache
-tokens, launch at login, and whether to detect sessions waiting on you.
+The gear — in the hover as well as the panel — holds the settings: which displays to appear on,
+which per-session details the hover carries, how the panel animates when it opens, whether to
+count cache tokens, launch at login, and whether to detect sessions waiting on you.
+
+Five opening animations are available: **Liquid** (the default — the panel pinches at the top and
+its bottom edge sags as it pours out of the notch), **Snap** (quick and crisp), **Unfold** (unrolls
+downwards like a drawer), **Bounce** (overshoots and settles), and **No animation**.
 
 ### Detecting sessions that are waiting on you
 

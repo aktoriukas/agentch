@@ -47,6 +47,17 @@ enum AppMenu {
         fieldsItem.submenu = fields
         menu.addItem(fieldsItem)
 
+        let animations = NSMenu()
+        for style in NotchAnimation.allCases {
+            animations.addItem(item(style.label, checked: state.animation == style) {
+                state.animation = style
+                style.save()
+            })
+        }
+        let animationItem = NSMenuItem(title: "Opening animation", action: nil, keyEquivalent: "")
+        animationItem.submenu = animations
+        menu.addItem(animationItem)
+
         menu.addItem(.separator())
         menu.addItem(item("Count cache tokens", checked: state.parity == .all) {
             state.parity = state.parity == .all ? .conversational : .all

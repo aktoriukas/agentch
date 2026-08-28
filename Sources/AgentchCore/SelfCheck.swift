@@ -196,6 +196,26 @@ public enum SelfCheck {
         expect(reset.ratePerHour(for: window(0.02, resets: 5 * 3_600), now: now) == nil,
                "a reset clears stale history instead of reporting a negative rate")
 
+        // Settings round-trip through a scratch domain so the real preferences stay untouched.
+        let suite = "agentch.selfcheck"
+        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        defaults.removePersistentDomain(forName: suite)
+        expect(NotchAnimation.load(defaults) == .liquid, "animation defaults to liquid")
+        expect(HoverFields.load(defaults) == .standard, "hover fields default to the standard set")
+        for style in NotchAnimation.allCases {
+            style.save(defaults)
+            expect(NotchAnimation.load(defaults) == style, "\(style.label) round-trips")
+        }
+        expect(Set(NotchAnimation.allCases.map(\.label)).count == NotchAnimation.allCases.count,
+               "animation labels are distinct")
+        expect(NotchAnimation.allCases.count == 5, "five animation choices")
+        var fields = HoverFields.standard
+        fields.formSymmetricDifference(.tokens)
+        fields.save(defaults)
+        expect(HoverFields.load(defaults).contains(.tokens), "hover field choice round-trips")
+        expect(!HoverFields.load(defaults).isEmpty, "an empty selection is still a valid choice")
+        defaults.removePersistentDomain(forName: suite)
+
         if failures.isEmpty {
             print("selfcheck: ok")
             return true
