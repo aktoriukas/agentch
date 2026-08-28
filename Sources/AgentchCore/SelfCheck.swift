@@ -200,15 +200,7 @@ public enum SelfCheck {
         let suite = "agentch.selfcheck"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
-        expect(NotchAnimation.load(defaults) == .liquid, "animation defaults to liquid")
         expect(HoverFields.load(defaults) == .standard, "hover fields default to the standard set")
-        for style in NotchAnimation.allCases {
-            style.save(defaults)
-            expect(NotchAnimation.load(defaults) == style, "\(style.label) round-trips")
-        }
-        expect(Set(NotchAnimation.allCases.map(\.label)).count == NotchAnimation.allCases.count,
-               "animation labels are distinct")
-        expect(NotchAnimation.allCases.count == 5, "five animation choices")
         var fields = HoverFields.standard
         fields.formSymmetricDifference(.tokens)
         fields.save(defaults)

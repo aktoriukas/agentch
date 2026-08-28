@@ -3,37 +3,21 @@ import AgentchCore
 
 // MARK: - Shape
 
-/// Flush against the top screen edge, rounded along the bottom. `bulge` sags the bottom edge
-/// mid-transition so the panel appears to pour out of the notch rather than snap open.
+/// Flush against the top screen edge, rounded along the bottom.
 struct NotchShape: Shape {
     var cornerRadius: CGFloat = 13
-    var bulge: CGFloat = 0
-
-    var animatableData: CGFloat {
-        get { bulge }
-        set { bulge = newValue }
-    }
 
     func path(in rect: CGRect) -> Path {
-        // Rounder while it is moving; the corners tighten as the shape settles.
-        let r = min(cornerRadius + bulge * 2, rect.height / 2, rect.width / 2)
-        let sag = bulge * min(9, rect.height * 0.2)
-        // Pinched at the top mid-transition, as though the panel is being drawn out of the notch.
-        let pinch = bulge * min(7, rect.width * 0.03)
-
+        let r = min(cornerRadius, rect.height / 2, rect.width / 2)
         var path = Path()
-        path.move(to: CGPoint(x: rect.minX + pinch, y: rect.minY))
-        path.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - r),
-                          control: CGPoint(x: rect.minX + pinch * 0.25, y: rect.midY))
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
         path.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY),
                           control: CGPoint(x: rect.minX, y: rect.maxY))
-        // The sagging middle is what reads as liquid.
-        path.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
-                          control: CGPoint(x: rect.midX, y: rect.maxY + sag))
+        path.addLine(to: CGPoint(x: rect.maxX - r, y: rect.maxY))
         path.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY - r),
                           control: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addQuadCurve(to: CGPoint(x: rect.maxX - pinch, y: rect.minY),
-                          control: CGPoint(x: rect.maxX - pinch * 0.25, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
         path.closeSubpath()
         return path
     }
@@ -90,14 +74,12 @@ struct NotchRootView: View {
         vm.size(for: vm.stage, sessionCount: state.activeSessions.count)
     }
 
-    private var motion: NotchMotion { state.animation.motion }
-
     var body: some View {
         VStack(spacing: 0) {
             content
                 .frame(width: size.width, height: size.height)
-                .background(NotchShape(bulge: vm.bulge).fill(.black))
-                .clipShape(NotchShape(bulge: vm.bulge))
+                .background(NotchShape().fill(.black))
+                .clipShape(NotchShape())
                 .shadow(color: .black.opacity(vm.stage == .closed ? 0 : 0.5),
                         radius: vm.stage == .closed ? 0 : 20, y: 8)
             Spacer(minLength: 0)
@@ -107,20 +89,15 @@ struct NotchRootView: View {
 
     @ViewBuilder
     private var content: some View {
-        // .identity everywhere: content must vanish the instant a stage ends, never cross-fade
-        // with the frame that is still moving.
         switch vm.stage {
         case .closed:
             ClosedView(vm: vm, state: state)
-                .transition(.identity)
         case .peek:
-            PeekView(state: state, topInset: vm.closedSize.height, reveal: motion.reveal,
-                     expand: { vm.setStage(.open, motion: motion) })
-                .transition(.identity)
+            PeekView(state: state, topInset: vm.closedSize.height,
+                     expand: { vm.setStage(.open) })
         case .open:
-            PanelView(state: state, topInset: vm.closedSize.height, reveal: motion.reveal,
-                      collapse: { vm.setStage(.peek, motion: motion) })
-                .transition(.identity)
+            PanelView(state: state, topInset: vm.closedSize.height,
+                      collapse: { vm.setStage(.peek) })
         }
     }
 }
@@ -171,7 +148,6 @@ struct ClosedView: View {
 struct PeekView: View {
     var state: AppState
     var topInset: CGFloat = 24
-    var reveal: RevealSpec = .off
     var expand: () -> Void
 
     private var sessions: [AgentSession] { state.activeSessions }
@@ -179,26 +155,23 @@ struct PeekView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            header.staggered(row: 0, spec: reveal)
+            header
             if sessions.isEmpty {
                 Text("No active sessions")
                     .font(.system(size: 11))
                     .foregroundStyle(.white.opacity(0.4))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .frame(height: NotchViewModel.peekRowHeight)
-                    .staggered(row: 1, spec: reveal)
             }
-            ForEach(Array(shown.enumerated()), id: \.element.id) { index, session in
+            ForEach(shown) { session in
                 CompactSessionRow(session: session, fields: state.hoverFields, parity: state.parity)
                     .frame(height: NotchViewModel.peekRowHeight)
-                    .staggered(row: index + 1, spec: reveal)
             }
             if sessions.count > NotchViewModel.peekRowLimit {
                 Text("+\(sessions.count - NotchViewModel.peekRowLimit) more")
                     .font(.system(size: 9))
                     .foregroundStyle(.white.opacity(0.35))
                     .frame(height: 16)
-                    .staggered(row: shown.count + 1, spec: reveal)
             }
         }
         .padding(.horizontal, 14)
@@ -305,7 +278,6 @@ struct IconButton: View {
 struct PanelView: View {
     var state: AppState
     var topInset: CGFloat = 24
-    var reveal: RevealSpec = .off
     var collapse: () -> Void
     @State private var filter: Provider?
 
@@ -316,21 +288,18 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            header.staggered(row: 0, spec: reveal)
-            limitsRow.staggered(row: 1, spec: reveal)
+            header
+            limitsRow
             Divider().overlay(.white.opacity(0.1))
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach(Array(visibleSessions.enumerated()), id: \.element.id) { index, session in
-                        VStack(spacing: 0) {
-                            SessionRow(session: session, parity: state.parity)
-                            Divider().overlay(.white.opacity(0.06))
-                        }
-                        .staggered(row: index + 2, spec: reveal)
+                    ForEach(visibleSessions) { session in
+                        SessionRow(session: session, parity: state.parity)
+                        Divider().overlay(.white.opacity(0.06))
                     }
                 }
             }
-            footer.staggered(row: visibleSessions.count + 2, spec: reveal)
+            footer
         }
         .padding(.horizontal, 16)
         .padding(.top, topInset + 6)

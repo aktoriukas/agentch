@@ -34,38 +34,6 @@ enum DevRender {
         .padding(.horizontal, 16)
         write(rows, size: CGSize(width: 680, height: 220), name: "rows")
 
-        // Each style caught mid-transition, since motion cannot be previewed any other way here.
-        for style in NotchAnimation.allCases {
-            writeRaw(midTransition(style, state: state, vm: pill), name: "style-\(style.rawValue)")
-        }
-    }
-
-    /// The frame partway through opening. Only the frame differs per style now — the content
-    /// reveal is shared — so that is all this compares.
-    private static func midTransition(_ style: NotchAnimation, state: AppState, vm: NotchViewModel) -> some View {
-        let bulge = style.motion.bulgeAmount * 0.7
-        return PeekView(state: state, topInset: vm.closedSize.height, expand: {})
-            .frame(width: 470, height: vm.peekSize(sessionCount: state.activeSessions.count).height)
-            .background(NotchShape(bulge: bulge).fill(.black))
-            .clipShape(NotchShape(bulge: bulge))
-            .padding(16)
-            .background(Color(white: 0.28))
-            .overlay(alignment: .bottom) {
-                Text(style.label)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.bottom, 2)
-            }
-    }
-
-    private static func writeRaw(_ view: some View, name: String) {
-        let renderer = ImageRenderer(content: view.environment(\.colorScheme, .dark))
-        renderer.scale = 2
-        guard let image = renderer.nsImage,
-              let tiff = image.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff),
-              let png = bitmap.representation(using: .png, properties: [:]) else { return }
-        try? png.write(to: URL(fileURLWithPath: "/tmp/agentch-\(name).png"))
     }
 
     /// Prints what the providers actually return, for checking against each vendor's own UI.

@@ -16,8 +16,6 @@ final class AppState {
     var menuIsOpen = false
     /// Which per-session details the hover shows.
     var hoverFields: HoverFields = HoverFields.load()
-    /// How the panel opens and closes.
-    var animation: NotchAnimation = NotchAnimation.load()
     private var burn = BurnTracker()
 
     /// The limit window closest to running out before it resets, if any is on track to.

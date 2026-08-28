@@ -26,16 +26,12 @@ a notched built-in.
   filterable per provider with model, branch, context use, tokens and estimated cost, and how long
   until a limit window fills at the current burn rate.
 
-The gear — in the hover as well as the panel — holds the settings: which displays to appear on,
-which per-session details the hover carries, how the panel animates when it opens, whether to
-count cache tokens, launch at login, and whether to detect sessions waiting on you.
+Every stage change is instant — the panel and its content are simply there, with no animation to
+sit through.
 
-Opening happens in two layers. The **frame** is what the setting chooses between: **Liquid** (the
-default — the panel pinches at the top and its bottom edge sags as it travels), **Snap** (quick and
-crisp), **Unfold** (a flat eased slide), **Bounce** (one small overshoot), or **No animation**. The
-**content** then settles in line by line — starting only once the frame has arrived, the same way
-whichever frame style is picked, and skipped entirely when animation is off. Closing reverses the
-order: the content goes at once, then the frame shrinks behind it.
+The gear — in the hover as well as the panel — holds the settings: which displays to appear on,
+which per-session details the hover carries, whether to count cache tokens, launch at login, and
+whether to detect sessions waiting on you.
 
 ### Detecting sessions that are waiting on you
 

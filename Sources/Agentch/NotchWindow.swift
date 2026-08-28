@@ -28,8 +28,6 @@ enum NotchStage {
 @Observable
 final class NotchViewModel {
     private(set) var stage: NotchStage = .closed
-    /// How far the panel's bottom edge sags mid-transition, 0...1. Drives the liquid feel.
-    private(set) var bulge: CGFloat = 0
 
     let closedSize: CGSize
     let isRealNotch: Bool
@@ -40,26 +38,9 @@ final class NotchViewModel {
         self.isRealNotch = isRealNotch
     }
 
-    /// Moves the frame. The content reveals itself once the new stage renders, so this only has
-    /// to get the shape there.
-    func setStage(_ new: NotchStage, motion: NotchMotion) {
+    func setStage(_ new: NotchStage) {
         guard new != stage else { return }
-
-        guard !motion.isInstant else {
-            bulge = 0
-            stage = new
-            onStageChange?(new)
-            return
-        }
-
-        // Closing deforms less; it is a retreat, not a pour.
-        bulge = motion.bulgeAmount * (new == .closed ? 0.55 : 1)
-        withAnimation(motion.size) { stage = new }
-        if motion.bulgeAmount > 0 {
-            withAnimation(motion.bulge?.delay(0.02)) { bulge = 0 }
-        } else {
-            bulge = 0
-        }
+        stage = new
         onStageChange?(new)
     }
 
@@ -165,12 +146,12 @@ final class NotchController {
     func pointerMoved(to point: CGPoint) {
         switch vm.stage {
         case .closed:
-            if rect(for: .closed).contains(point) { vm.setStage(.peek, motion: state.animation.motion) }
+            if rect(for: .closed).contains(point) { vm.setStage(.peek) }
         case .peek:
             // While a menu is up the pointer wanders off; keep the panel open behind it.
-            if !rect(for: .peek).contains(point), !state.menuIsOpen { vm.setStage(.closed, motion: state.animation.motion) }
+            if !rect(for: .peek).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
         case .open:
-            if !rect(for: .open).contains(point), !state.menuIsOpen { vm.setStage(.closed, motion: state.animation.motion) }
+            if !rect(for: .open).contains(point), !state.menuIsOpen { vm.setStage(.closed) }
         }
     }
 
