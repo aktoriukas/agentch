@@ -26,25 +26,25 @@ struct RevealSpec {
 }
 
 extension NotchAnimation {
-    /// Deliberately small: short travel, near-critical damping. The frame should look precise,
-    /// not springy.
+    /// Short enough to feel instant, long enough to see. Timing curves rather than springs
+    /// wherever possible, so `settle` is the frame's real duration and the content can start the
+    /// moment it ends with no gap to guess at.
     var motion: NotchMotion {
         switch self {
         case .liquid:
-            // The edge lags the size change, by just enough to read as give rather than bounce.
-            // Waits on the size, not the edge: the bulge is still easing out underneath.
-            NotchMotion(size: .spring(response: 0.28, dampingFraction: 0.88),
-                        bulge: .spring(response: 0.34, dampingFraction: 0.74),
+            // Size lands at 0.18; the edge keeps easing out under the content, which is the point.
+            NotchMotion(size: .timingCurve(0.25, 0.95, 0.3, 1, duration: 0.18),
+                        bulge: .spring(response: 0.26, dampingFraction: 0.72),
                         bulgeAmount: 0.42,
-                        settle: 0.3)
+                        settle: 0.18)
         case .snap:
-            NotchMotion(size: .spring(response: 0.17, dampingFraction: 0.96), settle: 0.19)
+            NotchMotion(size: .easeOut(duration: 0.12), settle: 0.12)
         case .unfold:
-            NotchMotion(size: .timingCurve(0.25, 0.9, 0.25, 1, duration: 0.24), settle: 0.24)
+            NotchMotion(size: .timingCurve(0.2, 0.9, 0.2, 1, duration: 0.16), settle: 0.16)
         case .bounce:
-            // The springiest of the set, which still means a single small overshoot.
-            // Longer than the others: the overshoot has to come back before content lands.
-            NotchMotion(size: .spring(response: 0.3, dampingFraction: 0.72), settle: 0.38)
+            // The one spring left, because an overshoot is the whole idea. Settle is where the
+            // size crosses back through its target rather than where it stops ringing.
+            NotchMotion(size: .spring(response: 0.22, dampingFraction: 0.68), settle: 0.22)
         case .none:
             NotchMotion()
         }
@@ -55,12 +55,12 @@ extension NotchAnimation {
 /// skipped entirely when animation is off.
 enum ContentReveal {
     /// Gap between consecutive lines. Small: the stagger should be sensed, not counted.
-    static let step = 0.02
-    static let duration = 0.13
-    static let rise: CGFloat = -4
+    static let step = 0.015
+    static let duration = 0.1
+    static let rise: CGFloat = -3
     /// Rows past this share the last delay, so a long list reveals no slower than a short one.
     /// The cascade is already waiting on the frame, so it has to stay brief.
-    static let lastStaggeredRow = 6
+    static let lastStaggeredRow = 5
 
     static func animation(row: Int, leadIn: Double) -> Animation {
         let delay = leadIn + Double(min(row, lastStaggeredRow)) * step
