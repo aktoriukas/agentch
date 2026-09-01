@@ -5,19 +5,31 @@
 #
 #   ./scripts/build-app.sh              -> build/Agentch.app
 #   ./scripts/build-app.sh --install    -> also copies it to /Applications
+#   ./scripts/build-app.sh --universal  -> arm64 + x86_64, for release artifacts (needs Xcode)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+INSTALL=false
+ARCHS=()
+for arg in "$@"; do
+    case "$arg" in
+        --install) INSTALL=true ;;
+        --universal) ARCHS=(--arch arm64 --arch x86_64) ;;
+        *) echo "unknown option: $arg" >&2; exit 2 ;;
+    esac
+done
+
 # A release tarball has no git metadata, so packagers pass the version in.
 VERSION="${AGENTCH_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")}"
 APP="build/Agentch.app"
-BIN=".build/release/Agentch"
 
 echo "==> Building Agentch $VERSION"
 # --disable-sandbox: SwiftPM sandboxes manifest evaluation with sandbox-exec, which is itself
 # refused inside Homebrew's build sandbox.
-swift build -c release --disable-sandbox
+swift build -c release --disable-sandbox ${ARCHS[@]+"${ARCHS[@]}"}
+# A universal build lands somewhere else entirely, so ask rather than assume.
+BIN="$(swift build -c release --disable-sandbox ${ARCHS[@]+"${ARCHS[@]}"} --show-bin-path)/Agentch"
 
 echo "==> Rendering the icon"
 "$BIN" --icon >/dev/null
@@ -62,7 +74,7 @@ codesign --force --deep --sign - "$APP" 2>/dev/null
 
 echo "==> Built $APP"
 
-if [[ "${1:-}" == "--install" ]]; then
+if [[ "$INSTALL" == true ]]; then
     echo "==> Installing to /Applications"
     rm -rf /Applications/Agentch.app
     cp -R "$APP" /Applications/Agentch.app

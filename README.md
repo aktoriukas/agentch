@@ -70,17 +70,20 @@ sit through.
 
 ## Installing it
 
+**One line, no toolchain.** Downloads the prebuilt app from the latest release:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aktoriukas/agentch/main/scripts/install.sh | bash
+```
+
+**Or with Homebrew**, which builds it from source on your machine (about a minute, needs macOS 14+
+and a Swift 6 toolchain — Xcode or `xcode-select --install`):
+
 ```bash
 brew install aktoriukas/tap/agentch
 ln -sfn "$(brew --prefix)/opt/agentch/Agentch.app" /Applications/Agentch.app
 open -a Agentch
 ```
-
-The formula builds from source on your machine, which takes about a minute and needs macOS 14+ and
-a Swift 6 toolchain (Xcode or the Command Line Tools — `xcode-select --install`). Building locally
-is deliberate rather than lazy: an unsigned app downloaded from a release gets quarantined by
-Gatekeeper, and one compiled on your own machine does not. Upgrade later with `brew upgrade
-agentch`.
 
 Nothing appears in the Dock or the menu bar — that is deliberate, it runs as an agent app. Move
 your pointer to the notch (or to the top centre of your display, if it has no notch) and the panel
@@ -93,6 +96,22 @@ neither network nor auth — they are read straight out of its local rollout fil
 
 Then, optionally, open the gear in the hover or the panel to turn on **Launch at login** and
 **"waiting on you" detection**.
+
+### About the Gatekeeper warning
+
+agentch is not signed with an Apple Developer ID, because that costs $99 a year and this is a
+personal project. It is ad-hoc signed, which is enough to run but not enough for Gatekeeper, so a
+copy you *download* is quarantined and macOS refuses to open it.
+
+There are three honest ways around that, and the two install commands above are the first two:
+
+- The install script removes the quarantine flag for you, after checking the download against a
+  published SHA-256. Read [the script](scripts/install.sh) first — it is short, and it is doing the
+  thing Gatekeeper exists to stop.
+- Homebrew builds it on your machine, so nothing is ever downloaded pre-built and nothing is
+  quarantined.
+- If you download `Agentch.app.zip` from the releases page by hand, unquarantine it yourself:
+  `xattr -dr com.apple.quarantine /Applications/Agentch.app`.
 
 ### From source
 

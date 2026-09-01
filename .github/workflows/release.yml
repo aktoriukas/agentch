@@ -1,0 +1,37 @@
+name: Release
+
+# Builds the app on a GitHub runner and attaches it to the release. Runners carry full Xcode, so
+# the artifact is universal; a laptop with only the Command Line Tools cannot build one.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  app:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build a universal Agentch.app
+        env:
+          AGENTCH_VERSION: ${{ github.event.release.tag_name }}
+        run: |
+          export AGENTCH_VERSION="${AGENTCH_VERSION#v}"
+          ./scripts/build-app.sh --universal
+          lipo -archs build/Agentch.app/Contents/MacOS/Agentch
+
+      - name: Zip it
+        # ditto, not zip: it is the only one that preserves the bundle's symlinks and metadata.
+        run: |
+          ditto -c -k --keepParent build/Agentch.app Agentch.app.zip
+          shasum -a 256 Agentch.app.zip | tee Agentch.app.zip.sha256
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            Agentch.app.zip Agentch.app.zip.sha256 --clobber
