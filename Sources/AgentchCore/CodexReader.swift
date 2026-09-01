@@ -61,6 +61,11 @@ public actor CodexMonitor {
 
     /// Sessions touched within this window appear in the feed at all.
     private static let feedWindow: TimeInterval = 24 * 3_600
+    /// Limits are account state, not session state, so the newest snapshot is worth having even
+    /// when it is older than the feed. Codex writes one only on a real turn, and writes
+    /// `"rate_limits": null` on every turn the server did not report any.
+    private static let limitsWindow: TimeInterval = 7 * 24 * 3_600
+    private static let limitsFileLimit = 40
     /// A rollout written this recently is mid-turn.
     private static let workingWindow: TimeInterval = 60
     /// ponytail: mtime only. Distinguishing "idle but alive" from "exited" needs lsof/pgrep per
@@ -112,10 +117,18 @@ public actor CodexMonitor {
             ))
         }
 
-        // The most recently written rollout carries the current limits; older ones are stale.
-        if let freshest = files.lazy.compactMap({ self.cache[$0]?.summary }).first(where: { $0.rateLimits != nil }),
+        // The most recently written rollout carries the current limits; older ones are stale. A day
+        // of idleness leaves nothing in the feed window, so this reaches further back than the feed
+        // and then throws away whatever has since reset.
+        let limitFiles = recentFiles(limit: Self.limitsFileLimit, now: now, within: Self.limitsWindow)
+        if let freshest = limitFiles.lazy.compactMap({ self.summary(for: $0) })
+            .first(where: { $0.rateLimits != nil }),
            let limits = freshest.rateLimits {
             scan.limits = Self.limitWindows(limits, fetchedAt: freshest.modifiedAt)
+                .filter { $0.resetsAt.map { $0 > now } ?? true }
+        }
+        if scan.limits.isEmpty {
+            scan.notice = "No limits reported since the last Codex turn"
         }
         return scan
     }
@@ -142,7 +155,8 @@ public actor CodexMonitor {
     }
 
     /// Newest first.
-    private func recentFiles(limit: Int, now: Date) -> [URL] {
+    private func recentFiles(limit: Int, now: Date, within: TimeInterval? = nil) -> [URL] {
+        let window = within ?? Self.feedWindow
         let keys: [URLResourceKey] = [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]
         guard let walker = FileManager.default.enumerator(at: sessionsDirectory,
                                                           includingPropertiesForKeys: keys,
@@ -152,7 +166,7 @@ public actor CodexMonitor {
             guard let values = try? url.resourceValues(forKeys: Set(keys)),
                   values.isRegularFile == true,
                   let modified = values.contentModificationDate,
-                  now.timeIntervalSince(modified) < Self.feedWindow
+                  now.timeIntervalSince(modified) < window
             else { continue }
             candidates.append((url, modified))
         }

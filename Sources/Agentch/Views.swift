@@ -302,7 +302,8 @@ struct PeekView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            NotchFlank(limits: state.limits, notchWidth: notchWidth, height: topInset)
+            NotchFlank(limits: state.limits, notchWidth: notchWidth, height: topInset,
+                       notice: { state.shortNotice(for: $0) })
             Spacer(minLength: 0).frame(height: 6)
             if sessions.isEmpty {
                 Text("No active sessions")
@@ -500,43 +501,86 @@ struct IconButton: View {
     }
 }
 
-/// The five-hour window per provider, parked in the dead space either side of the hardware
-/// cutout. Same position in both stages, so the number does not move when the panel opens.
+/// The nearest window per provider, parked in the dead space either side of the hardware cutout.
+/// Same position in both stages, so the number does not move when the panel opens.
 struct NotchFlank: View {
     var limits: [LimitWindow]
     var notchWidth: CGFloat
     var height: CGFloat
+    /// Why a provider has no windows, when it has none. The panel spells it out in full; here
+    /// there is room for a couple of words.
+    var notice: (Provider) -> String? = { _ in nil }
 
     /// The screen edge is the panel's top edge, so the cell needs a gap or its rounded corners
     /// run off it. Only where the band is tall enough to spare it.
     private var inset: CGFloat { height > 30 ? 4 : 0 }
 
-    /// Fixed provider order, so the two sides do not swap between refreshes.
-    private var fiveHour: [LimitWindow] {
-        Provider.allCases.compactMap { provider in
-            limits.first { $0.provider == provider && $0.kind == .session5h }
-        }
+    /// The five-hour window when there is one, else whichever window is closest to its ceiling —
+    /// an idle Codex reports no five-hour window at all, and a weekly figure beats a blank.
+    private func nearest(_ provider: Provider) -> LimitWindow? {
+        let mine = limits.filter { $0.provider == provider }
+        return mine.first { $0.kind == .session5h }
+            ?? mine.max { $0.fractionUsed < $1.fractionUsed }
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            side(fiveHour.first)
+            side(Provider.allCases.first)
             // The cutout itself. Anything drawn here is behind the hardware.
             Color.clear.frame(width: notchWidth)
-            side(fiveHour.dropFirst().first)
+            side(Provider.allCases.dropFirst().first)
         }
         .frame(height: height)
     }
 
+    private var diameter: CGFloat { min(24, max(14, height - inset - 10)) }
+
     @ViewBuilder
-    private func side(_ limit: LimitWindow?) -> some View {
-        if let limit {
-            RingCell(limit: limit, diameter: min(24, max(14, height - inset - 10)))
-                .frame(maxWidth: .infinity)
-                .padding(.top, inset)
+    private func side(_ provider: Provider?) -> some View {
+        if let provider {
+            Group {
+                if let limit = nearest(provider) {
+                    RingCell(limit: limit, diameter: diameter)
+                } else {
+                    // A provider that reports nothing still gets its cell: an empty gap beside the
+                    // notch reads as a bug, and the reason is short enough to fit.
+                    EmptyRingCell(provider: provider, reason: notice(provider), diameter: diameter)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, inset)
         } else {
             Color.clear.frame(maxWidth: .infinity)
         }
+    }
+}
+
+/// Same shape as a RingCell, but the ring is empty and the number is a reason.
+struct EmptyRingCell: View {
+    var provider: Provider
+    var reason: String?
+    var diameter: CGFloat = 24
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ProviderRing(provider: provider, fractionUsed: 0, color: .clear,
+                         diameter: diameter, lineWidth: max(1.5, diameter * 0.083))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(provider.displayName.uppercased())
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(0.5)
+                    .foregroundStyle(UI.fg3)
+                Text(reason ?? "no limits reported")
+                    .font(.system(size: 9))
+                    .tracking(0.1)
+                    .foregroundStyle(UI.fg4)
+            }
+            Spacer(minLength: 0)
+        }
+        .lineLimit(1)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(RoundedRectangle(cornerRadius: 7).fill(UI.surface))
     }
 }
 
@@ -555,10 +599,20 @@ struct RingCell: View {
                          diameter: diameter,
                          lineWidth: max(1.5, diameter * 0.083))
             VStack(alignment: .leading, spacing: 1) {
-                Text(limit.provider.displayName.uppercased())
-                    .font(.system(size: 9, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(UI.fg2)
+                HStack(spacing: 4) {
+                    Text(limit.provider.displayName.uppercased())
+                        .font(.system(size: 9, weight: .semibold))
+                        .tracking(0.5)
+                        .foregroundStyle(UI.fg2)
+                    // Silent only for the five-hour window; anything else has to name itself or
+                    // the number reads as the wrong quota.
+                    if limit.kind != .session5h {
+                        Text(limit.kind.label.uppercased())
+                            .font(.system(size: 8, weight: .medium))
+                            .tracking(0.4)
+                            .foregroundStyle(UI.fg4)
+                    }
+                }
                 HStack(spacing: 4) {
                     Text(Format.percent(limit.fractionUsed))
                         .font(.system(size: 10, weight: .medium))
@@ -644,7 +698,8 @@ struct PanelView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            NotchFlank(limits: state.limits, notchWidth: notchWidth, height: topInset)
+            NotchFlank(limits: state.limits, notchWidth: notchWidth, height: topInset,
+                       notice: { state.shortNotice(for: $0) })
             Spacer(minLength: 0).frame(height: 12)
             limitsBand
             Spacer(minLength: 0).frame(height: 16)

@@ -47,6 +47,12 @@ final class AppState {
         scans[provider]?.notice
     }
 
+    /// The flank cell has room for two or three words, not a sentence.
+    func shortNotice(for provider: Provider) -> String? {
+        guard let notice = scans[provider]?.notice else { return nil }
+        return notice.contains("Sign in") ? "sign in" : "no recent data"
+    }
+
     /// A provider with neither limits nor sessions has nothing to say yet.
     func hasAnything(_ provider: Provider) -> Bool {
         !(scans[provider]?.limits.isEmpty ?? true) || !(scans[provider]?.sessions.isEmpty ?? true)
