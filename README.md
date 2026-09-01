@@ -70,71 +70,41 @@ sit through.
 
 ## Installing it
 
-There is no signed or notarised build yet, so you build it from source. It takes about a minute.
-
-**1. Check you are on macOS 14 or newer.**
-
 ```bash
-sw_vers -productVersion
-```
-
-**2. Make sure you have a Swift 6 toolchain.**
-
-```bash
-swift --version
-```
-
-If that fails, install Apple's Command Line Tools and try again. Xcode works too, but is not
-required — this project is SwiftPM-only and has no `.xcodeproj`.
-
-```bash
-xcode-select --install
-```
-
-**3. Clone the repository.**
-
-```bash
-git clone https://github.com/aktoriukas/agentch.git
-cd agentch
-```
-
-**4. Build it.**
-
-```bash
-swift build -c release
-```
-
-**5. Build the app bundle and install it.**
-
-```bash
-./scripts/build-app.sh --install
+brew install aktoriukas/tap/agentch
+ln -sfn "$(brew --prefix)/opt/agentch/Agentch.app" /Applications/Agentch.app
 open -a Agentch
 ```
 
-That produces `Agentch.app`, icon and all, and copies it to `/Applications`. Drop `--install` to
-leave it in `build/` instead. To run the bare executable without a bundle, `.build/release/Agentch`
-works too — but launch-at-login needs the bundle.
+The formula builds from source on your machine, which takes about a minute and needs macOS 14+ and
+a Swift 6 toolchain (Xcode or the Command Line Tools — `xcode-select --install`). Building locally
+is deliberate rather than lazy: an unsigned app downloaded from a release gets quarantined by
+Gatekeeper, and one compiled on your own machine does not. Upgrade later with `brew upgrade
+agentch`.
 
 Nothing appears in the Dock or the menu bar — that is deliberate, it runs as an agent app. Move
 your pointer to the notch (or to the top centre of your display, if it has no notch) and the panel
 appears.
-
-**6. Grant Keychain access when macOS asks.**
 
 The first time it fetches Claude limits, macOS prompts for access to the Keychain item Claude Code
 stores its OAuth token in. Allow it and the limits come from Anthropic's usage endpoint; deny it
 and agentch falls back to a local 5-hour estimate, labelled `est.` in the UI. Codex limits need
 neither network nor auth — they are read straight out of its local rollout files.
 
-**7. Optional: keep it running.**
+Then, optionally, open the gear in the hover or the panel to turn on **Launch at login** and
+**"waiting on you" detection**.
 
-Open the gear in the hover or the panel and turn on **Launch at login**.
+### From source
 
-**8. Optional: turn on "waiting on you" detection.**
+```bash
+git clone https://github.com/aktoriukas/agentch.git
+cd agentch
+./scripts/build-app.sh --install
+```
 
-Also in settings, under Claude Code. See below for exactly what it changes.
-
-To update later, `git pull` and repeat step 4.
+That builds `Agentch.app`, icon and all, and copies it to `/Applications`. Drop `--install` to
+leave it in `build/`. The bare executable at `.build/release/Agentch` runs too, but launch-at-login
+needs the bundle.
 
 ### Detecting sessions that are waiting on you
 
