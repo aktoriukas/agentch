@@ -97,21 +97,16 @@ neither network nor auth — they are read straight out of its local rollout fil
 Then, optionally, open the gear in the hover or the panel to turn on **Launch at login** and
 **"waiting on you" detection**.
 
-### About the Gatekeeper warning
+### Gatekeeper
 
-agentch is not signed with an Apple Developer ID, because that costs $99 a year and this is a
-personal project. It is ad-hoc signed, which is enough to run but not enough for Gatekeeper, so a
-copy you *download* is quarantined and macOS refuses to open it.
+agentch is not notarised, so a copy you *download* is quarantined and macOS refuses to open it. The
+install script removes that flag after verifying the download against a published SHA-256, and
+Homebrew builds locally so nothing is quarantined in the first place. If you grab the zip from the
+releases page by hand:
 
-There are three honest ways around that, and the two install commands above are the first two:
-
-- The install script removes the quarantine flag for you, after checking the download against a
-  published SHA-256. Read [the script](scripts/install.sh) first — it is short, and it is doing the
-  thing Gatekeeper exists to stop.
-- Homebrew builds it on your machine, so nothing is ever downloaded pre-built and nothing is
-  quarantined.
-- If you download `Agentch.app.zip` from the releases page by hand, unquarantine it yourself:
-  `xattr -dr com.apple.quarantine /Applications/Agentch.app`.
+```bash
+xattr -dr com.apple.quarantine /Applications/Agentch.app
+```
 
 ### From source
 
@@ -152,9 +147,9 @@ The icon is drawn in SwiftUI (`Sources/Agentch/AppIcon.swift`) rather than kept 
 so `scripts/build-app.sh` renders it, downsamples it into an iconset and packs the `.icns` at build
 time.
 
-`--render` exists because this machine has Command Line Tools without Xcode: there are no previews,
-and no XCTest or swift-testing either, so checks live in `AgentchCore/SelfCheck.swift`. The
-screenshots above come straight out of it.
+`--render` exists so the UI can be reviewed without Xcode previews; the screenshots above come
+straight out of it. Checks live in `AgentchCore/SelfCheck.swift` rather than a test target, so they
+run without XCTest.
 
 ## Credits
 
