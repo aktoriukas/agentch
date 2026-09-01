@@ -9,12 +9,15 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")
+# A release tarball has no git metadata, so packagers pass the version in.
+VERSION="${AGENTCH_VERSION:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "0.0.0")}"
 APP="build/Agentch.app"
 BIN=".build/release/Agentch"
 
 echo "==> Building Agentch $VERSION"
-swift build -c release
+# --disable-sandbox: SwiftPM sandboxes manifest evaluation with sandbox-exec, which is itself
+# refused inside Homebrew's build sandbox.
+swift build -c release --disable-sandbox
 
 echo "==> Rendering the icon"
 "$BIN" --icon >/dev/null
