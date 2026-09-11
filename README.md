@@ -45,9 +45,10 @@ Xcode needed, the Command Line Tools are enough (`xcode-select --install`).
 **Nothing appears in the Dock or the menu bar.** That is deliberate — move the pointer to the notch,
 or to the top centre of the screen on a display without one.
 
-macOS will ask for Keychain access the first time Claude limits are fetched. Allow it and the
-numbers come from Anthropic's usage endpoint; deny it and you get a local estimate labelled `est.`
-instead. Codex needs neither network nor auth.
+Claude limits come from Anthropic's usage endpoint, using the OAuth token Claude Code keeps in your
+Keychain. agentch reads that token the same way Claude Code does, through the system `security`
+tool, so macOS does not prompt for it. If the token cannot be read you get a local estimate
+labelled `est.` instead. Codex needs neither network nor auth.
 
 Then open the gear to turn on **Launch at login** and **"waiting on you" detection** if you want
 them.

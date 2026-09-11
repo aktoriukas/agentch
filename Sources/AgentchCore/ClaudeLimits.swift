@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 /// Read-only access to Claude Code's OAuth token. agentch never writes it and never refreshes it:
 /// refresh tokens are single-use, so redeeming one would sign the real CLI out.
@@ -16,7 +15,7 @@ enum ClaudeCredentials {
     enum Failure: Error {
         /// No credentials anywhere — Claude Code has probably never signed in on this machine.
         case missing
-        /// The item exists but this process may not read it (denied, or the ACL was rotated).
+        /// The item exists but could not be read (the user declined, or its ACL refuses this process).
         case denied
         /// Present but holding something other than a Claude OAuth token.
         case unusable
@@ -34,22 +33,35 @@ enum ClaudeCredentials {
         return decode(data)
     }
 
+    /// Reads through Apple's own `security` tool rather than SecItemCopyMatching. Claude Code writes
+    /// the item with that tool, which leaves it partitioned to `apple-tool:` — and an ad-hoc signed
+    /// app has no Team ID that macOS could add to that partition, so "Always Allow" never sticks
+    /// and every direct read prompts again. `security` is Apple-signed, satisfies the partition, and
+    /// reads silently, which is also how Claude Code itself reads the token back.
     private static func fromKeychain() -> Result<Token, Failure> {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        switch SecItemCopyMatching(query as CFDictionary, &item) {
-        case errSecSuccess:
-            guard let data = item as? Data, let token = decode(data) else { return .failure(.unusable) }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-w", "-s", service]
+        let stdout = Pipe()
+        process.standardOutput = stdout
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return .failure(.denied) }
+        // Drain before waiting, so a payload larger than the pipe buffer cannot deadlock.
+        let output = stdout.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return interpret(status: process.terminationStatus, output: output)
+    }
+
+    /// `security` exits 44 (errSecItemNotFound) when there is no item; any other non-zero status
+    /// is a refusal, including the user declining a prompt.
+    static func interpret(status: Int32, output: Data) -> Result<Token, Failure> {
+        switch status {
+        case 0:
+            guard let token = decode(output) else { return .failure(.unusable) }
             return .success(token)
-        case errSecItemNotFound:
+        case 44:
             return .failure(.missing)
         default:
-            // Includes the user declining the access prompt.
             return .failure(.denied)
         }
     }

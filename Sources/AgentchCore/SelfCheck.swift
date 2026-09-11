@@ -226,6 +226,26 @@ public enum SelfCheck {
         expect(SessionLink.url(for: session(.claude, link: nil)) == nil, "no id, no link")
         expect(SessionLink.url(for: session(.codex, link: "")) == nil, "empty id, no link")
 
+        // Keychain reads go through `security`, whose exit status carries the outcome.
+        let stored = #"{"claudeAiOauth":{"accessToken":"tok","expiresAt":1757000000000,"subscriptionType":"max"}}"#
+        switch ClaudeCredentials.interpret(status: 0, output: Data((stored + "\n").utf8)) {
+        case .success(let token):
+            expect(token.accessToken == "tok", "credentials access token")
+            expect(token.subscriptionType == "max", "credentials subscription type")
+            expect(token.expiresAt == Date(timeIntervalSince1970: 1_757_000_000), "credentials expiry is in ms")
+        case .failure:
+            expect(false, "credentials parse from security output")
+        }
+        if case .failure(.missing) = ClaudeCredentials.interpret(status: 44, output: Data()) {} else {
+            expect(false, "security exit 44 means no item")
+        }
+        if case .failure(.denied) = ClaudeCredentials.interpret(status: 51, output: Data()) {} else {
+            expect(false, "any other security failure is a refusal")
+        }
+        if case .failure(.unusable) = ClaudeCredentials.interpret(status: 0, output: Data("{}".utf8)) {} else {
+            expect(false, "an item without an oauth blob is unusable")
+        }
+
         if failures.isEmpty {
             print("selfcheck: ok")
             return true
